@@ -1,0 +1,342 @@
+<!DOCTYPE html>
+<!-- saved from url=(0064)https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html -->
+<html xmlns="http://www.w3.org/1999/xhtml" lang="" xml:lang=""><head><meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  
+  <meta name="generator" content="pandoc">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0, user-scalable=yes">
+  <title>State of Loom</title>
+  <style>
+    code{white-space: pre-wrap;}
+    span.smallcaps{font-variant: small-caps;}
+    span.underline{text-decoration: underline;}
+    div.column{display: inline-block; vertical-align: top; width: 50%;}
+    div.hanging-indent{margin-left: 1.5em; text-indent: -1.5em;}
+    ul.task-list{list-style: none;}
+    pre > code.sourceCode { white-space: pre; position: relative; }
+    pre > code.sourceCode > span { display: inline-block; line-height: 1.25; }
+    pre > code.sourceCode > span:empty { height: 1.2em; }
+    code.sourceCode > span { color: inherit; text-decoration: inherit; }
+    div.sourceCode { margin: 1em 0; }
+    pre.sourceCode { margin: 0; }
+    @media screen {
+    div.sourceCode { overflow: auto; }
+    }
+    @media print {
+    pre > code.sourceCode { white-space: pre-wrap; }
+    pre > code.sourceCode > span { text-indent: -5em; padding-left: 5em; }
+    }
+    pre.numberSource code
+      { counter-reset: source-line 0; }
+    pre.numberSource code > span
+      { position: relative; left: -4em; counter-increment: source-line; }
+    pre.numberSource code > span > a:first-child::before
+      { content: counter(source-line);
+        position: relative; left: -1em; text-align: right; vertical-align: baseline;
+        border: none; display: inline-block;
+        -webkit-touch-callout: none; -webkit-user-select: none;
+        -khtml-user-select: none; -moz-user-select: none;
+        -ms-user-select: none; user-select: none;
+        padding: 0 4px; width: 4em;
+        color: #aaaaaa;
+      }
+    pre.numberSource { margin-left: 3em; border-left: 1px solid #aaaaaa;  padding-left: 4px; }
+    div.sourceCode
+      {   }
+    @media screen {
+    pre > code.sourceCode > span > a:first-child::before { text-decoration: underline; }
+    }
+    code span.al { color: #ff0000; font-weight: bold; } /* Alert */
+    code span.an { color: #60a0b0; font-weight: bold; font-style: italic; } /* Annotation */
+    code span.at { color: #7d9029; } /* Attribute */
+    code span.bn { color: #40a070; } /* BaseN */
+    code span.bu { } /* BuiltIn */
+    code span.cf { color: #007020; font-weight: bold; } /* ControlFlow */
+    code span.ch { color: #4070a0; } /* Char */
+    code span.cn { color: #880000; } /* Constant */
+    code span.co { color: #60a0b0; font-style: italic; } /* Comment */
+    code span.cv { color: #60a0b0; font-weight: bold; font-style: italic; } /* CommentVar */
+    code span.do { color: #ba2121; font-style: italic; } /* Documentation */
+    code span.dt { color: #902000; } /* DataType */
+    code span.dv { color: #40a070; } /* DecVal */
+    code span.er { color: #ff0000; font-weight: bold; } /* Error */
+    code span.ex { } /* Extension */
+    code span.fl { color: #40a070; } /* Float */
+    code span.fu { color: #06287e; } /* Function */
+    code span.im { } /* Import */
+    code span.in { color: #60a0b0; font-weight: bold; font-style: italic; } /* Information */
+    code span.kw { color: #007020; font-weight: bold; } /* Keyword */
+    code span.op { color: #666666; } /* Operator */
+    code span.ot { color: #007020; } /* Other */
+    code span.pp { color: #bc7a00; } /* Preprocessor */
+    code span.sc { color: #4070a0; } /* SpecialChar */
+    code span.ss { color: #bb6688; } /* SpecialString */
+    code span.st { color: #4070a0; } /* String */
+    code span.va { color: #19177c; } /* Variable */
+    code span.vs { color: #4070a0; } /* VerbatimString */
+    code span.wa { color: #60a0b0; font-weight: bold; font-style: italic; } /* Warning */
+  </style>
+  <!--[if lt IE 9]>
+    <script src="//cdnjs.cloudflare.com/ajax/libs/html5shiv/3.7.3/html5shiv-printshiv.min.js"></script>
+  <![endif]-->
+      <style type="text/css">
+        A { text-decoration: none; }
+        A:link, A:visited { color: #437291; }
+        A:visited { color: #666666; }
+        A[href]:hover { color: #e76f00; }
+        A IMG { border-width: 0px; }
+        IMG { background: white; }
+        A.internal { color: #b00; }
+        A[name] { color: black; }
+
+        BODY {
+          background: white;
+          margin: 2em;
+          font-size: medium;
+          width: 40em;
+          margin-bottom: 100%;
+        }
+        BODY { font-family: Bitstream Vera Sans, Verdana, sans serif; }
+        PRE { font-family: monospace; }
+        PRE {
+          width: 75em;
+          padding: 1px 1ex;
+          background: #e8e8e8;
+          font-size: smaller;
+          ZZdisplay: none;
+        }
+        DIV.sourceCode { width: 75em; }
+        /*PRE { margin: 1.5ex 2em; }*/
+        CODE { font-family: courier new, monospace; font-size: medium; font-weight: bold; }
+
+        .wide { width: 75em; }
+        
+        P { margin: 1ex 0em; }
+        
+        BLOCKQUOTE { margin: 1.5ex 2em; }
+        LI BLOCKQUOTE { margin-left: 0em; }
+        LI { margin: 0ex 0em; }
+        .todo { color: darkred; text-align: right; }
+
+        TABLE, TH, TD { border: 2px solid gray; padding: 2px; }
+        TABLE { border-collapse: collapse; }
+        TD { vertical-align: top; }
+
+        UL LI { list-style-type: square; }
+
+        DIV.summary { margin: 2ex 2em; }
+
+        DIV.head { margin-bottom: 2em; }
+        DIV.doctitle { font-size: x-large; font-weight: bold; }
+        DIV.twarn { color: #cc0000; font-size: smaller; font-weight: bold;
+                    margin-bottom: 1.5ex; }
+        DIV.authors { margin-top: 1ex; font-size: large; }
+        DIV.author A { font-style: italic; }
+        DIV.version { font-size: medium; margin-top: 1ex; }
+        DIV.copyright, DIV.comments { font-size: small; }
+        DIV.version SPAN.modified { color: green; font-weight: bold; }
+        DIV.head DIV.notes { margin-top: 1ex; }
+
+        P.subsection { margin-top: 2ex; }
+        P.subsection:first-child { margin-top: 1ex; }
+        P SPAN.title { font-weight: bold; padding-right: 1em; }
+
+        HR { border: 0px; border-top: 1px solid black; margin: 2ex 0em; }
+
+        DIV.qa { margin-top: 2ex; }
+
+        H1 { font-size: x-large; }
+        H2 { font-size: large; margin-top: 3ex; margin-bottom: 0ex; }
+
+        PRE.jvm { font-style: italic; }
+     </style>
+</head>
+<body>
+<header id="title-block-header">
+<h1 class="title">State of Loom</h1>
+</header>
+<p><strong>Ron Pressler, May 2020</strong></p>
+<p><a href="https://wiki.openjdk.java.net/display/loom/Main">Project Loom</a> aims to drastically reduce the effort of writing, maintaining, and observing high-throughput concurrent applications that make the best use of available hardware.</p>
+<p>Work on Project Loom started in late 2017. This document explains the motivations for the project and the approaches taken, and summarizes our work so far. Like all OpenJDK projects, it will be delivered in stages, with different components arriving in GA (General Availability) at different times, likely taking advantage of the <a href="https://openjdk.java.net/jeps/12">Preview</a> mechanism, first.</p>
+<p>You can find more material about Project Loom on its <a href="https://wiki.openjdk.java.net/display/loom/">wiki</a>, and try most of what’s described below in the <a href="http://jdk.java.net/loom/">Loom EA binaries</a> (Early Access). Feedback to the <a href="https://mail.openjdk.java.net/pipermail/loom-dev/">loom-dev</a> mailing list <em>reporting on your experience using Loom</em> will be much appreciated.</p>
+<div class="sourceCode" id="cb1"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb1-1"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb1-1"></a><span class="bu">Thread</span>.<span class="fu">startVirtualThread</span>(() -&gt; {</span>
+<span id="cb1-2"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb1-2"></a>    <span class="bu">System</span>.<span class="fu">out</span>.<span class="fu">println</span>(<span class="st">"Hello, Loom!"</span>);</span>
+<span id="cb1-3"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb1-3"></a>});</span></code></pre></div>
+<p><strong>Key Takeaways</strong></p>
+<div class="wide">
+<ul>
+<li>A virtual thread is a <code>Thread</code> — in code, at runtime, in the debugger and in the profiler.</li>
+<li>A virtual thread is not a wrapper around an OS thread, but a Java entity.</li>
+<li>Creating a virtual thread is cheap — have millions, and don’t pool them!</li>
+<li>Blocking a virtual thread is cheap — be synchronous!</li>
+<li>No language changes are needed.</li>
+<li>Pluggable schedulers offer the flexibility of asynchronous programming.</li>
+</ul>
+</div>
+<p><strong>Contents</strong></p>
+<ul>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#why">Why</a>
+<ul>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#threads-are-what-its-all-about">Threads Are What It’s All About</a></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#propping-threads-up-by-missing-their-point">Propping Threads Up by Missing Their Point</a></li>
+</ul></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#right-sizing-threads">Right-Sizing Threads</a>
+<ul>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#migration-from-threads-to-virtual-threads">Migration: From Threads to (Virtual) Threads</a></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#you-already-know-how-to-program-with-virtual-threads">(You Already Know) How to Program with Virtual Threads</a></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#scheduling">Scheduling</a></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#performance-and-footprint">Performance and Footprint</a></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#pinning">Pinning</a></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#all-your-blocking-are-belong-to-us">All Your Blocking Are Belong to Us</a></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#debugging-and-profiling">Debugging and Profiling</a></li>
+</ul></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#sidebar-why-virtual">Sidebar: Why “Virtual”?</a></li>
+<li><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html">Part 2: Further Work</a></li>
+</ul>
+<h2 id="why">Why</h2>
+<h3 id="threads-are-what-its-all-about">Threads Are What It’s All About</h3>
+<p>Java is used to write some of the biggest, most scalable applications in the world. Scalability is the ability of a program to gracefully handle growing workloads. One way in which Java programs scale is <em>parallelism</em>: we want to process a chunk of data that could grow quite large, so we describe its transformation as a pipeline of lambdas on a stream, and by setting it to <code>parallel</code> we ask multiple processing cores to sink their teeth into the task as one, like a swarm of piranhas devouring a large fish; one piranha could get the job done — it’s just faster this way. That mechanism was delivered in Java 8. But there’s a different, harder and more prevalent, kind of scaling, which is about handling relatively independent tasks demanded of the application at the same time. That they must be served simultaneously is not an implementation choice but a requirement. We call that <em>concurrency</em>, it’s the bread-and-butter of contemporary software, and that’s what Loom is about.</p>
+<p>Consider the web server. Each of the requests it serves is largely independent of the others. For each, we do some parsing, query a database or issue a request to a service and wait for the result, do some more processing and send a response. Not only does this process not cooperate with other simultaneous HTTP requests on completing some job, most of the time it doesn’t care at all about what other requests are doing, yet it still competes with them for processing and I/O resources. Not piranhas, but taxis, each with its own route and destination, it travels and makes its stops. The presence of other taxis traveling on the same road system does not make any one cab reach its destination any sooner — if anything, it might slow it down — but if only a single cab could be on the city roads at any one time it wouldn’t just be a slow transit system, it would be a dysfunctional one. The more taxis that can share the roads without gridlocking downtown, the better the system. From its early days Java supported this kind of job. Servlets allow us to write code that looks straightforward on the screen. It’s a simple sequence — parsing, database query, processing, response — that doesn’t worry if the server is now handling just this one request or a thousand others.</p>
+<p>Every concurrent application has some units of concurrency natural to its domain, some work that is done independently of other work and at the same time. For a web server, this could be the HTTP request or the user session; for a database server this could be the transaction. Concurrency has a long and rich history that predates Java’s, but the idea, as far as how Java was designed, is simple: represent this domain unit of concurrency with a software unit of concurrency that runs sequentially, like a taxi going on its simple route without caring about any others. This software construct is the thread. It virtualizes resources, from processors to I/O devices, and schedules their use — exploiting the fact that each process might employ different hardware units at different times — exposing it as a sequential process. The defining feature of threads is that they sequence not only processing operations but also <em>blocking</em> — waiting for some external occurrence, be it I/O or some event or triggered by another thread, continuing execution only after that occurrence. The question of how threads should best communicate with one another — what the appropriate mix of shared data structures and message passing should be — is not essential to the concept of threads, and it’s possible that whatever the current mix is in Java applications, it will shift with new features.</p>
+<p>Whether you use them directly or inside, say, a JAX-RS framework, concurrency in Java means threads. In fact, the entire Java platform — from the VM, through the language and libraries, to the debuggers and profilers — is built around the thread as the core organizing component of a running program:</p>
+<ul>
+<li>I/O APIs are <em>synchronous</em> and describe initiating I/O operations and waiting for their result as a sequential ordering of statements by <em>blocking</em> the thread;</li>
+<li>Memory side-effects (if organized to be race-free) are sequentially ordered by the actions of the thread, as if no other thread is competing to use that memory;</li>
+<li>exceptions provide useful information by placing the failing operation in the context of the current thread’s call-stack;</li>
+<li>single-stepping in a debugger follows execution in order, whether it entails some processing or I/O because single-stepping is associated with a thread;</li>
+<li>application profiles organize work by threads when showing how much time is spent processing or waiting for I/O or synchronization.</li>
+</ul>
+<p>The problem is that the thread, the software unit of concurrency, cannot match the scale of the application domain’s natural units of concurrency — a session, an HTTP request, or a single database operation — nor can it match the scale of concurrency that modern hardware can support. A server can handle upward of a million concurrent open sockets, yet the operating system cannot efficiently handle more than a few thousand active (non-idle) threads. As the workload on the servlet container increases and more requests are in flight, its ability to scale is hampered by the relatively small number of threads the operating system can support because <a href="https://en.wikipedia.org/wiki/Little&#39;s_law">Little’s law</a> tells us that the average duration of servicing a request is directly proportional to the number of requests we can service concurrently. So if we represent a domain unit of concurrency with a thread, the scarcity of threads becomes our scalability bottleneck long before the hardware does.<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fn1" class="footnote-ref" id="fnref1" role="doc-noteref"><sup>1</sup></a> Servlets read nicely but scale poorly.</p>
+<p>This is not a fundamental limitation of the concept of threads, but an accidental feature of their implementation in the JDK as trivial wrappers around operating system threads. OS threads have a high footprint, creating them requires allocating OS resources, and scheduling them — i.e.&nbsp;assigning hardware resources to them — is suboptimal. They’re not taxis so much as trains.</p>
+<p>This creates a large mismatch between what threads were <em>meant</em> to do — abstract the scheduling of computational resources as a straightforward construct — and what they effectively <em>can</em> do. A mismatch in several orders of magnitude can have a big impact.</p>
+<h3 id="propping-threads-up-by-missing-their-point">Propping Threads Up by Missing Their Point</h3>
+<p>And a big impact it’s had. Ironically, the threads invented to virtualize scarce computational resources for the purpose of transparently sharing them, have themselves become scarce resources, and so we’ve had to erect complex scaffolding to share <em>them</em>.</p>
+<p>Because threads are costly to create, we pool them. The cost of creating a new thread is so high that to reuse them we happily pay the price of <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html#scope-variables">leaking thread-locals</a> and a <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html#more-on-interruption-and-cancellation">complex cancellation protocol</a>.</p>
+<p>But pooling alone offers a thread-sharing mechanism that is too coarse-grained. There just aren’t enough threads in a thread pool to represent all the concurrent tasks running even <em>at a single point in time</em>. Borrowing a thread from the pool for the entire duration of a task holds on to the thread even while it is waiting for some external event, such as a response from a database or a service, or any other activity that would block it. OS threads are just too precious to hang on to when the task is inactive. To share threads more finely and efficiently, we could return the thread to the pool every time the task has to wait for some result. This means that the task is no longer bound to a single thread for its entire execution. It also means we must avoid blocking the thread.</p>
+<p>The result is the proliferation of <em>asynchronous</em> APIs, from asynchronous NIO in the JDK, through asynchronous servlets, to the many so-called “reactive” libraries that go to great lengths to not block threads. Chopping down tasks to pieces and letting the asynchronous construct put them together results in intrusive, all-encompassing and constraining frameworks. Even basic control flow, like loops and try/catch, need to be reconstructed in “reactive” DSLs, some sporting classes with hundreds of methods.</p>
+<p>Because, as mentioned above, much of the Java platform assumes that execution context is embodied in a thread, all that context is lost once we dissociate tasks from threads: Exception stack traces no longer provide a useful context, when single-stepping in the debugger we find ourselves in scheduler code, jumping from one task to another, and the profile of an application under I/O load might show us idle thread pools, because tasks waiting for I/O do not keep holding their thread by blocking and, instead, return it to the pool.</p>
+<p>This style is now used by some not because it is easier to understand — it’s harder; not because it is easier to debug or profile — it’s <em>much</em> harder; not because it fits well with the rest of the language or integrates well with existing code or can be hidden away in “experts-only code”— quite the opposite, <a href="http://journal.stuffwithstuff.com/2015/02/01/what-color-is-your-function/">it is virally-intrusive and makes clean integration with ordinary synchronous code virtually impossible</a>, but just because the implementation of threads in Java is inadequate in both footprint and performance. The asynchronous programming style fights the design of the Java platform at every turn and pays a high price in maintainability and observability. But it does so <em>for a good reason</em>: to meet the scalability and throughput demands and make good use of costly hardware resources.</p>
+<p>Some programming languages tried to address the problem of thorny asynchronous code by building a <em>new</em> concept on top of threads: <a href="https://en.wikipedia.org/wiki/Async/await">async/await</a>.<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fn2" class="footnote-ref" id="fnref2" role="doc-noteref"><sup>2</sup></a> It works similarly to threads but cooperative scheduling points are marked explicitly with <code>await</code>. This makes it possible to write scalable synchronous code and solves the context issue by introducing a new kind of context that is a thread in all but name but is <em>incompatible with threads</em>. If synchronous and asynchronous code cannot normally be mixed — one blocks and the other returns some sort of <code>Future</code> or <code>Flow</code> — async/await creates two differently “colored” worlds that cannot be mixed even though <em>both</em> of them are synchronous, and, to make matters more confusing, calls synchronous code asynchronous to indicate that, despite being synchronous, no thread is blocked. As a result, C# requires <a href="https://social.technet.microsoft.com/wiki/contents/articles/21177.visual-c-thread-sleep-vs-task-delay.aspx"><em>two</em> different APIs to suspend execution of the currently executing code for some predetermined duration</a>, and <a href="https://medium.com/@mohak1712/kotlin-coroutines-thread-sleep-vs-delay-63171fe8a24">Kotlin does too</a>, one to suspend the thread and one to suspend the new construct that is <em>like</em> a thread, but isn’t. The same goes for all synchronous APIs, from synchronization to I/O, that are duplicated. Not only is there no single abstraction of two implementations of the same concept, but the two worlds are syntactically disjoint, requiring the programmer to mark her code units as suitable to run in one mode or the other, but not both.</p>
+<p>Moreover, explicit cooperative scheduling points provide little benefit on the Java platform. The VM is optimized for peak performance, not deterministic worst-case latency like a realtime OS, and so it might nondeterministically introduce various pauses at arbitrary points in the program, for GC, for deoptimization, not to mention arbitrary, nondeterministic and indefinite preemption by the OS. The duration of a blocking operation can range from several orders of magnitude longer than those nondeterministic pauses to several orders of magnitude <em>shorter</em>, and so explicitly marking them is of little help. A better way to control latency, and at a more appropriate granularity, is <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html#structured-interruption">deadlines</a>.</p>
+<p>The mechanisms built to manage threads as a scarce resource are an unfortunate case of a good abstraction abandoned in favor of another, worse in most respects, merely because of the runtime performance characteristics of the implementation. This state of affairs has had a large deleterious effect on the Java ecosystem.</p>
+<p><strong>Programmers are forced to choose between modeling a unit of domain concurrency directly as a thread and wasting considerable throughput that their hardware can support, or using other ways to implement concurrency on a very fine-grained level but relinquishing the strengths of the Java platform. Both choices have a considerable financial cost, either in hardware or in development and maintenance effort.</strong></p>
+<p>We can do better.</p>
+<p>Project Loom intends to eliminate the frustrating tradeoff between efficiently running concurrent programs and efficiently writing, maintaining and observing them. It leans into the strengths of the platform rather than fight them, and also into the strengths of the efficient components of asynchronous programming. It lets you write programs in a familiar style, using familiar APIs, and in harmony with the platform and its tools — but also with the hardware — to reach a balance of write-time and runtime costs that, we hope, will be widely appealing. It does so without changing the language, and with only minor changes to the core library APIs. A simple, synchronous web server will be able to handle many more requests without requiring more hardware.</p>
+<h2 id="right-sizing-threads">Right-Sizing Threads</h2>
+<p>If we could make threads lighter, we could have more of them. If we have more of them, they could be used as intended: to directly represent domain units of concurrency by virtualizing scarce computational resources and hiding the complexity of managing those resources. This is not a new idea, and is perhaps most familiar as the approach taken in Erlang and Go.</p>
+<p>Our foundation is <strong>virtual threads</strong>. Virtual threads are just threads, but creating and blocking them is cheap. They are managed by the Java runtime and, unlike the existing platform threads, are not one-to-one wrappers of OS threads, rather, they are implemented in userspace in the JDK.</p>
+<p>OS threads are heavyweight because they must support all languages and all workloads. A thread requires the ability to suspend and resume the execution of a computation. This requires preserving its state, which includes the instruction pointer, or program counter, that contains the index of the current instruction, as well as all of the local computation data, which is stored on the stack. Because the OS does not know how a language manages its stack, it must allocate one that is large enough. Then we must <em>schedule</em> executions when they become <em>runnable</em> — started or unparked — by assigning them to some free CPU core. Because the OS kernel must schedule all manner of threads that behave very differently from one another in their blend of processing and blocking — some serving HTTP requests, others playing videos — its scheduler must be an adequate all-around compromise.</p>
+<p>Loom adds the ability to control execution, suspending and resuming it, by reifying its state not as an OS resource, but as a Java object known to the VM, and under the direct control of the Java runtime. Java objects securely and efficiently model all sorts of state machines and data structures, and so are well suited to model execution, too. The Java runtime knows how Java code makes use of the stack, so it can represent execution state more compactly. Direct control over execution also lets us pick schedulers — ordinary Java schedulers — that are better-tailored to our workload; in fact, we can use pluggable custom schedulers. Thus, the Java runtime’s superior insight into Java code allows us to shrink the cost of threads.</p>
+<p>Whereas the OS can support up to a few thousand active threads, the Java runtime can support millions of virtual threads. Every unit of concurrency in the application domain can be represented by its own thread, making programming concurrent applications easier. Forget about thread-pools, just spawn a new thread, one per task. You’ve already spawned a new virtual thread to handle an incoming HTTP request, but now, in the course of handling the request, you want to simultaneously query a database and issue outgoing requests to three other services? No problem — spawn <em>more</em> threads. You need to wait for something to happen without wasting precious resources? Forget about callbacks or reactive stream chaining — just block. Write straightforward, boring code. All the benefits threads give us — control flow, exception context, debugging flow, profiling organization — are preserved by virtual threads; only the runtime cost in footprint and performance is gone. There is no loss in flexibility compared to asynchronous programming because, as we’ll see, we have not ceded fine-grained control over scheduling.</p>
+<h3 id="migration-from-threads-to-virtual-threads">Migration: From Threads to (Virtual) Threads</h3>
+<p>With new capabilities on hand, we knew how to <em>implement</em> virtual threads; how to represent those threads to programmers was less clear.</p>
+<p>Every new Java feature creates a tension between conservation and innovation. Forward compatibility lets existing code enjoy the new feature (a great example of that is how old code using single-abstract-method types works with lambdas). But we also wish to correct past design mistakes and begin afresh.</p>
+<p>The <code>java.lang.Thread</code> class dates back to Java 1.0, and over the years accumulated both methods and internal fields. It contains methods such as <code>suspend</code>, <code>resume</code>, <code>stop</code> and <code>countStackFrames</code>, that have been deprecated for over twenty years, methods like <code>getAllStackTraces</code> that assume that the number of threads is small, antiquated concepts such as the context-classloader, added to support certain application container usages, and even older ones, such as <code>ThreadGroup</code>, whose original purpose seems to have been lost to history yet still permeates a lot of internal code and tools that deal with threads, including outdated, unused methods such as <code>Thread.enumerate</code>.</p>
+<p>Indeed, earlier prototypes of Loom represented our user-mode threads in a new <code>Fiber</code> class that helped us examine the dependencies of existing code on the thread API. Several observations made during that experiment helped shape our position:</p>
+<ul>
+<li><em>Some</em> parts of the thread API are very pervasively used, in particular, <code>Thread.currentThread()</code> and <code>ThreadLocal</code>. Without them very little existing code can run. We tried making <code>ThreadLocal</code> mean thread-or-fiber-local and had <code>Thread.currentThread()</code> return some <code>Thread</code> view of the <code>Fiber</code>, but these were added complications.</li>
+<li>Other parts of the <code>Thread</code> API are not only seldom used, but are hardly exposed to programmers at all. Since Java 5, programmers have been encouraged to create and start threads indirectly through <code>ExecutorService</code>s, so that the clutter in the <code>Thread</code> class is not terribly harmful; new Java developers need not be exposed to most of it and not at all to its antiquated vestiges. So the pedagogical cost of keeping the <code>Thread</code> API is small.</li>
+<li>We could reduce the footprint of the metadata in the <code>Thread</code> class by moving it to a “sidecar” object to only be allocated on demand.</li>
+<li>The new deprecation and removal policy will gradually allow us to clean up the <code>Thread</code> API.</li>
+<li>We couldn’t come up with anything sufficiently better than <code>Thread</code> that would justify a completely new API.</li>
+</ul>
+<p>There are still some inconveniences like unfortunate return types and the <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html#more-on-interruption-and-cancellation">interruption mechanism</a>, but what we learned during that experiment — that we can keep parts of the Thread API and de-emphasize others — moved the needle in favor of keeping the existing API, and representing our user-mode threads with the <code>Thread</code> class. And here we are: virtual threads are just <code>Thread</code>s, and any library that knows <code>Thread</code> already knows virtual threads. Debuggers and profilers work with them as with today’s threads. Unlike async/await, they introduce no “semantic gap”: the behavior of the code as it appears to the programmer on the screen is preserved at runtime, and appears the same to all tools.</p>
+<h3 id="you-already-know-how-to-program-with-virtual-threads">(You Already Know) How to Program with Virtual Threads</h3>
+<p>Creating and starting a virtual thread can be done like so:</p>
+<div class="sourceCode" id="cb2"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb2-1"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb2-1"></a><span class="bu">Thread</span> t = <span class="bu">Thread</span>.<span class="fu">startVirtualThread</span>(() -&gt; { <span class="kw">... </span>});</span></code></pre></div>
+<p>For more flexibility, there’s the new <a href="https://download.java.net/java/early_access/loom/docs/api/java.base/java/lang/Thread.Builder.html"><code>Thread.Builder</code></a>, that can do the same thing as above:</p>
+<div class="sourceCode" id="cb3"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb3-1"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb3-1"></a><span class="bu">Thread</span> t = <span class="bu">Thread</span>.<span class="fu">builder</span>().<span class="fu">virtual</span>().<span class="fu">task</span>(() -&gt; { <span class="kw">... </span>}).<span class="fu">start</span>();</span></code></pre></div>
+<p>or create an unstarted virtual thread:</p>
+<div class="sourceCode" id="cb4"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb4-1"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb4-1"></a><span class="bu">Thread</span> t = <span class="bu">Thread</span>.<span class="fu">builder</span>().<span class="fu">virtual</span>().<span class="fu">task</span>(() -&gt; ...).<span class="fu">build</span>();</span></code></pre></div>
+<p>There is no public or protected <code>Thread</code> constructor to create a virtual thread, which means that subclasses of <code>Thread</code> cannot be virtual. Because subclassing platform classes constrains our ability to evolve them, it’s something we want to discourage.</p>
+<p>The builder can also create a <code>ThreadFactory</code>,</p>
+<div class="sourceCode" id="cb5"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb5-1"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb5-1"></a><span class="bu">ThreadFactory</span> tf = <span class="bu">Thread</span>.<span class="fu">builder</span>().<span class="fu">virtual</span>().<span class="fu">factory</span>();</span></code></pre></div>
+<p>that can be passed to <a href="https://docs.oracle.com/en/java/javase/14/docs/api/java.base/java/util/concurrent/Executors.html"><code>java.util.concurrent.Executors</code></a> to create <code>ExecutorService</code>s that employ virtual threads and used as usual. But since we don’t need and don’t want and to pool virtual threads, we’ve added a new method, <a href="https://download.java.net/java/early_access/loom/docs/api/java.base/java/util/concurrent/Executors.html#newUnboundedExecutor(java.util.concurrent.ThreadFactory)"><code>newUnboundedExecutor</code></a> to <code>Executors</code>. It constructs an <code>ExecutorService</code> that creates and starts a new thread for every submitted task <em>without pooling</em> — when a task terminates, its thread terminates:</p>
+<div class="sourceCode" id="cb6"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb6-1"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb6-1"></a><span class="bu">ThreadFactory</span> tf = <span class="bu">Thread</span>.<span class="fu">builder</span>().<span class="fu">virtual</span>().<span class="fu">factory</span>();</span>
+<span id="cb6-2"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb6-2"></a><span class="bu">ExecutorService</span> e = <span class="bu">Executors</span>.<span class="fu">newUnboundedExecutor</span>(tf);</span>
+<span id="cb6-3"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb6-3"></a><span class="bu">Future</span>&lt;<span class="bu">Result</span>&gt; f = e.<span class="fu">submit</span>(() -&gt; { <span class="kw">... return</span> result; }); <span class="co">// spawns a new virtual thread</span></span>
+<span id="cb6-4"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb6-4"></a>...</span>
+<span id="cb6-5"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb6-5"></a><span class="bu">Result</span> y = f.<span class="fu">get</span>(); <span class="co">// joins the virtual thread</span></span></code></pre></div>
+<p>The baggage of the <code>Thread</code> API doesn’t bother us, as we don’t use it directly.</p>
+<p>Other than constructing the <code>Thread</code> object, everything works as usual, except that the vestigial <code>ThreadGroup</code> of all virtual threads is fixed and cannot enumerate its members. <code>ThreadLocal</code>s work for virtual threads, as they do for the platform threads, but as they might drastically increase memory footprint, <code>Thread.Builder</code> allows the creator of a thread to forbid their use in that thread. We’re exploring an alternative to <code>ThreadLocal</code>, described in the <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html#scope-variables">Scope Variables</a> section.</p>
+<p>The introduction of virtual threads does not remove the existing thread implementation, supported by the OS. Virtual threads are just a new implementation of <code>Thread</code> that differs in footprint and scheduling. Both kinds can lock on the same locks, exchange data over the same <code>BlockingQueue</code> etc. A new method, <code>Thread.isVirtual</code>, can be used to distinguish between the two implementations, but only low-level synchronization or I/O code might care about that distinction.</p>
+<p>However, the existence of threads that are so lightweight compared to the threads we’re used to does require some mental adjustment. First, we no longer need to avoid blocking, because blocking a (virtual) thread is not costly. We can use all the familiar synchronous APIs without paying a high price in throughput. Second, creating these threads is cheap. Every task, within reason, can have its own thread entirely to itself; there is never a need to pool them. If we don’t pool them, how do we limit concurrent access to some service? Instead of breaking the task down and running the service-call subtask in a separate, constrained pool, we just let the entire task run start-to-finish, in its own thread, and use a semaphore in the service-call code to limit concurrency — this is how it <em>should</em> be done.</p>
+<p><strong>Using virtual threads well does not require learning new concepts so much as it demands we <em>unlearn</em> old habits developed over the years to cope with the high cost of threads and that we’ve come to automatically associate with threads merely because we’ve only had the one implementation.</strong></p>
+<p>In the remainder of this document, we will discuss how virtual threads extend beyond the behavior of classical threads, pointing out a few new API points and interesting use-cases, and observing some of the implementation challenges. But all you need to use virtual threads successfully has already been explained.</p>
+<h3 id="scheduling">Scheduling</h3>
+<p>Unlike the kernel scheduler that must be very general, virtual thread schedulers can be tailored for the task at hand. The same kind of flexible scheduling offered by asynchronous programming can be employed by virtual threads, but because the result is a thread and the details of scheduling well-hidden, you don’t need to understand how it works any more than you study the kernel scheduler, unless you intend to use or write a custom scheduler yourself. Otherwise, this section is completely optional.</p>
+<p>Outside the kernel we don’t have direct access to CPU cores, so we use kernel threads as an approximation: our scheduler will schedule virtual threads’ computations onto “physical” platform worker threads. We call the scheduler’s workers <em>carrier</em> threads, as they carry the virtual threads on their backs. Like asynchronous frameworks, we end up scheduling kernel threads, except we abstract the result as a thread rather than let the details of scheduling leak into application code.</p>
+<p>When a virtual thread becomes runnable the scheduler will (eventually) <em>mount</em> it on one of its worker platform threads, which will become the virtual thread’s carrier for a time and will run it until it is descheduled — usually when it blocks. The scheduler will then <em>unmount</em> that virtual thread from its carrier, and pick another to mount (if there are any runnable ones). Code that runs on a virtual thread cannot observe its carrier; <code>Thread.currentThread</code> will always return the current (virtual) thread.</p>
+<p>By default, virtual threads are scheduled by a global scheduler with as many workers as there are CPU cores (or as explicitly set with <code>-Djdk.defaultScheduler.parallelism=N</code>). A great many virtual threads are, then, scheduled onto a small number of platform threads. This is known as M:N scheduling (M user-mode threads are scheduled onto N kernel threads, where M &gt;&gt; N). <a href="https://docs.oracle.com/cd/E19455-01/806-3461/6jck06gqe/index.html">Early versions of the JDK</a>, also implemented <code>Thread</code>s in userspace as <em>green threads</em>; they, however, employed M:1 scheduling, using just one kernel thread.<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fn3" class="footnote-ref" id="fnref3" role="doc-noteref"><sup>3</sup></a></p>
+<p>Work-stealing schedulers work well for threads involved in transaction processing and message passing, that normally process in short bursts and block often, of the kind we’re likely to find in Java server applications. So initially, the default global scheduler is the work-stealing <code>ForkJoinPool</code>.</p>
+<p>Virtual threads are <a href="https://en.wikipedia.org/wiki/Preemption_(computing)#PREEMPTIVE">preemptive</a>, not <a href="https://en.wikipedia.org/wiki/Cooperative_multitasking">cooperative</a> — they do not have an explicit <code>await</code> operation at scheduling (task-switching) points. Rather, they are preempted when they block on I/O or synchronization. Platform threads are sometimes forcefully preempted by the kernel if they occupy the CPU for a duration that exceeds some allotted time-slice. Time-sharing works well as a scheduling policy when active threads don’t outnumber cores by much and only very few threads are processing-heavy. If a thread is hogging the CPU for too long, it’s preempted to make other threads responsive, and then it’s scheduled again for another time-slice. When we have millions of threads, this policy is less effective: if many of them are so CPU-hungry that they require time-sharing, then we’re under-provisioned by orders of magnitude and no scheduling policy could save us. In all other circumstances, either a work-stealing scheduler would automatically smooth over sporadic CPU-hogging or we could run problematic threads as platform threads and rely on the kernel scheduler. For this reason, none of the schedulers in the JDK currently employs time-slice-based preemption of virtual threads, but that is not to say it won’t in the future — see <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html#forced-preemption">Forced Preemption</a>.</p>
+<p>You must not make any assumptions about where the scheduling points are any more than you would for today’s threads. Even without forced preemption, any JDK or library method you call could introduce blocking, and so a task-switching point.</p>
+<p>Virtual threads can use an arbitrary, pluggable scheduler. A custom scheduler can be set on a per-thread basis, like so:</p>
+<div class="sourceCode" id="cb7"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb7-1"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb7-1"></a><span class="bu">Thread</span> t = <span class="bu">Thread</span>.<span class="fu">builder</span>().<span class="fu">virtual</span>(scheduler).<span class="fu">build</span>();</span></code></pre></div>
+<p>or per-factory, like so:</p>
+<div class="sourceCode" id="cb8"><pre class="sourceCode java"><code class="sourceCode java"><span id="cb8-1"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#cb8-1"></a><span class="bu">ThreadFactory</span> tf = <span class="bu">Thread</span>.<span class="fu">builder</span>().<span class="fu">virtual</span>(scheduler).<span class="fu">factory</span>();</span></code></pre></div>
+<p>The thread is assigned to the scheduler from birth till death.</p>
+<p>Custom schedulers can use various scheduling algorithms, and can even choose to schedule their virtual threads onto a particular single carrier thread or a set of them (although, if a scheduler only employs one worker it is more vulnerable to <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#pinning">pinning</a>).</p>
+<p>The custom scheduler doesn’t need to know that it is used to schedule virtual threads. It can be of any type implementing <code>java.util.concurrent.Executor</code>, and only needs to implement a single method: <code>execute</code>. This method will be called when the thread is made runnable, meaning, requesting to be scheduled, when started or unparked. But what is the <code>Runnable</code> instance passed to <code>execute</code>? It is a <a href="https://download.java.net/java/early_access/loom/docs/api/java.base/java/lang/Thread.VirtualThreadTask.html"><code>Thread.VirtualThreadTask</code></a> that allows the scheduler to query the virtual thread’s identity, and it wraps the internal preserved state of the virtual thread’s execution. When the scheduler assigns this <code>Runnable</code> to some worker thread that then calls the <code>run</code> method, the method will <em>mount</em> the virtual thread to become its <em>carrier</em>, and the virtual thread’s suspended execution will be magically restored and its execution resumed as if on top of the carrier. To the scheduler, the <code>run</code> method appears to behave like any other — it executes seemingly in the same thread (in fact, it does run in the same kernel thread) and ostensibly returns when the task terminates, but the code “inside” <code>run</code> will observe that it is running in a virtual thread, and <code>run</code> will return to the scheduler when the virtual thread blocks, putting the <code>VirtualThreadTask</code> in a suspended state. You can think of <code>VirtualThreadTask</code> as a <code>Runnable</code> embodying the resumption of the virtual thread’s execution. This is where the magic happens. This process will be explained in more detail in a separate document about this new VM capability.</p>
+<p>The scheduler must never execute the <code>VirtualThreadTask</code> concurrently on multiple carriers. In fact, the return from <code>run</code> must <a href="https://docs.oracle.com/javase/specs/jls/se14/html/jls-17.html#jls-17.4.5"><em>happen-before</em></a> another call to <code>run</code> on the same <code>VirtualThreadTask</code>.</p>
+<p>Regardless of scheduler, virtual threads exhibit the same memory consistency — specified by the <a href="https://docs.oracle.com/javase/specs/jls/se14/html/jls-17.html#jls-17.4.5">Java Memory Model</a> (JMM)<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fn4" class="footnote-ref" id="fnref4" role="doc-noteref"><sup>4</sup></a> — as platform <code>Thread</code>s, but custom schedulers could choose to provide stronger guarantees. For example, a scheduler with a single worker platform thread would make all memory operations totally ordered, not require the use of locks, and would allow using, say, <code>HashMap</code> instead of a <code>ConcurrentHashMap</code>. However, while threads that are race-free according to the JMM will be race-free on any scheduler, relying on the guarantees of a specific scheduler could result in threads that are race-free in that scheduler but not in others.</p>
+<h3 id="performance-and-footprint">Performance and Footprint</h3>
+<p>Both the task-switching cost of virtual threads as well as their memory footprint will improve with time, before and after the first release.</p>
+<p>Performance is determined by the algorithm the VM uses to mount and unmount a virtual thread as well as the behavior of the scheduler. For those that wish to experiment with performance, the VM option <code>-XX:[-/+]UseContinuationChunks</code> can be used to select between two underlying algorithms. In addition, the default scheduler, a <code>ForkJoinPool</code>, is not optimized for situations where it is under-utilized (there are fewer submitted tasks, i.e.&nbsp;runnable virtual threads, than workers) and performs sub-optimally in such cases, so you may want to experiment with the size of the default scheduler’s worker pool (<code>-Djdk.defaultScheduler.parallelism=N</code>).</p>
+<p>Footprint is determined mostly by the internal VM representation of the virtual thread’s state — which, while much better than a platform thread, is still not optimal — as well as the use of thread-locals.</p>
+<p>Discussions over the runtime characteristics of virtual threads should be brought to the loom-dev mailing list.</p>
+<h3 id="pinning">Pinning</h3>
+<p>We say that a virtual thread is <em>pinned</em> to its carrier if it is mounted but is in a state in which it cannot be unmounted. If a virtual thread blocks while pinned, it blocks its carrier. This behavior is still correct, but it holds on to a worker thread for the duration that the virtual thread is blocked, making it unavailable for other virtual threads.</p>
+<p>Occasional pinning is not harmful if the scheduler has multiple workers and can make good use of the other workers while some are pinned by a virtual thread. Very frequent pinning, however, will harm throughput.</p>
+<p>In the current Loom implementation, a virtual thread can be pinned in two situations: when there is a native frame on the stack — when Java code calls into native code (JNI) that then calls back into Java — and when inside a <code>synchronized</code> block or method. In those cases, blocking the virtual thread will block the physical thread that carries it. Once the native call completes or the monitor released (the <code>synchronized</code> block/method is exited) the thread is unpinned.</p>
+<p>If you have a common I/O operation guarded by a <code>synchronized</code>, replace the monitor with a <a href="https://docs.oracle.com/en/java/javase/14/docs/api/java.base/java/util/concurrent/locks/ReentrantLock.html"><code>ReentrantLock</code></a> to let your application benefit fully from Loom’s scalability boost even before we fix pinning by monitors (or, better yet, use the higher-performance <a href="https://docs.oracle.com/en/java/javase/14/docs/api/java.base/java/util/concurrent/locks/StampedLock.html"><code>StampedLock</code></a> if you can).</p>
+<p>Two commonly used methods in the JDK introduced a native frame that would pin a virtual thread: <code>AccessController.doPrivileged</code> and <code>Method.invoke</code> (+ its constructor counterpart, <code>Constructor.newInstance</code>). <code>doPrivileged</code> was rewritten in pure Java. <code>Method.invoke</code> uses a native call for some iterations, and after warmup generates Java bytecode; in the Loom prototype, we’ve reimplemented it in Java using <code>MethodHandle</code>s. Static class initializers are also called by native code, but they run very infrequently so we don’t worry about them.</p>
+<p>In addition, blocking in native code or attempting to obtain an unavailable monitor when entering <code>synchronized</code> or calling <code>Object.wait</code>, will also block the native carrier thread.</p>
+<p>The limitations of <code>synchronized</code> will eventually go away, but native frame pinning is here to stay. We do not expect it to have any significant adverse impact because such situations very rarely arise in Java, but Loom will add some diagnostics to detect pinned threads.</p>
+<h3 id="all-your-blocking-are-belong-to-us">All Your Blocking Are Belong to Us</h3>
+<p>Representing threads as “pure” Java objects is the first step. The second is getting all of your code and libraries to use the new mechanism; otherwise they will block OS threads instead of virtual threads. Luckily, we don’t need to change all libraries and all applications. Whenever you run a blocking operation in, say, Spring or Hibernate, it ultimately makes use of some core-library API in the JDK — the <code>java.*</code> packages. The JDK controls all the interaction points between the application and the OS or the outside world<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fn5" class="footnote-ref" id="fnref5" role="doc-noteref"><sup>5</sup></a>, so all we need to do is to adapt them to work with virtual threads. Everything built on top of the JDK will now work with virtual threads. Specifically, we need to adapt all points in the JDK where we block; these come in two flavors: synchronization (think locks or blocking queues) and I/O. In particular, when a synchronous I/O operation is called on a virtual thread, we want to block the virtual thread, perform a non-blocking I/O operation under the covers, and set it so that when the operation completes it will unblock the virtual thread.</p>
+<h4 id="synchronization">Synchronization</h4>
+<ul>
+<li>See limitations of <code>synchronized</code>/<code>Object.wait</code> in <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#pinning">pinning</a>.</li>
+<li>All other forms of synchronization, usually in the <code>java.util.concurrent</code> package and libraries that use it, block and unblock threads using the <code>LockSupport.park</code>/<code>unpark</code> methods. We’ve adapted those, so that <code>java.util.concurrent</code> is virtual-thread friendly.</li>
+<li>Further tuning to policies in <code>java.util.concurrent</code> is still necessary to get the best performance with virtual threads.</li>
+</ul>
+<h4 id="io">I/O</h4>
+<ul>
+<li>The <code>java.nio.channels</code> classes — <code>SocketChannel</code>, <code>ServerSocketChannel</code> and <code>DatagramChannel</code> — were retrofitted to become virtual-thread-friendly. When their synchronous operations, such as <code>read</code> and <code>write</code>, are performed on a virtual thread, only non-blocking I/O is used under the covers.</li>
+<li>“Old” I/O networking — <code>java.net.Socket</code>, <code>ServerSocket</code> and <code>DatagramSocket</code> — has been reimplemented in Java on top of NIO, so it immediately benefits from NIO’s virtual-thread-friendliness.</li>
+<li>DNS lookups by the <code>getHostName</code>, <code>getCanonicalHostName</code>, <code>getByName</code> methods of <code>java.net.InetAddress</code> (and other classes that use them) are still delegated to the operating system, which only provides a OS-thread-blocking API. Alternatives are being explored.</li>
+<li>Process pipes will similarly be made virtual-thread-friendly, except maybe on Windows, where this requires a greater effort.</li>
+<li>Console I/O has also been retrofitted.</li>
+<li><code>Http(s)URLConnection</code> and the implementation of TLS/SSL were changed to rely on <code>j.u.c</code> locks and avoid pinning.</li>
+<li>File I/O is problematic. Internally, the JDK uses buffered I/O for files, which always reports available bytes even when a read will block. On Linux, we plan to use <a href="https://kernel.dk/io_uring.pdf">io_uring</a> for asynchronous file I/O, and in the meantime we’re using the <a href="https://docs.oracle.com/en/java/javase/14/docs/api/java.base/java/util/concurrent/ForkJoinPool.ManagedBlocker.html"><code>ForkJoinPool.ManagedBlocker</code></a> mechanism to smooth over blocking file I/O operations by adding more OS threads to the worker pool when a worker is blocked.</li>
+</ul>
+<p>As a result, libraries that use the JDK’s networking primitives — whether in the JDK core library or outside it — will also automatically become non-(OS-thread-)blocking; this includes JDBC drivers, and HTTP clients and servers.</p>
+<h3 id="debugging-and-profiling">Debugging and Profiling</h3>
+<p>Serviceability and observability have always been high-priority concerns for the Java platform, and are among its distinguishing features. It was important for us to have a good debugging and profiling experience for virtual threads on day one, especially as these are aspects where virtual threads can offer significant benefits over asynchronous programming, whose particularly <em>bad</em> debugging and profiling experience is its own distinguishing feature.</p>
+<p>The debugger agent that powers the <a href="https://docs.oracle.com/en/java/javase/14/docs/specs/jdwp/jdwp-spec.html">Java Debugger Wire Protocol</a> (JDWP) and the <a href="https://docs.oracle.com/en/java/javase/14/docs/api/jdk.jdi/com/sun/jdi/package-summary.html">Java Debugger Interface</a> (JDI) used by Java debuggers and supports ordinary debugging operations such as breakpoints, single stepping, variable inspection etc., works for virtual threads as it does for classical threads. Stepping over a blocking operation behaves as you would expect, and single stepping doesn’t jump from one task to another, or to scheduler code, as happens when debugging asynchronous code. This has been facilitated by changes to support virtual threads at the <a href="https://docs.oracle.com/en/java/javase/14/docs/specs/jvmti.html">JVM TI</a> level. We’ve also engaged the IntelliJ IDEA and NetBeans debugger teams to test debugging virtual threads in those IDEs.</p>
+<p>Not <em>all</em> debugger operations are supported for virtual threads. You cannot individually suspend and resume a virtual thread in the debugger. A virtual thread is considered suspended if it is either currently mounted on a carrier thread and the carrier thread is suspended, or <em>all</em> threads are suspended (a common state in the debugger), in which case all virtual threads, mounted or not, are considered suspended, too; otherwise, it is considered running.</p>
+<p>Some operations pose special challenges. For example, debuggers often list all active threads. If you have a million threads, this is both slow and unhelpful. In fact, we do not offer any mechanism to enumerate all virtual threads. Some ideas are being explored, like listing only virtual threads on which some debugger event, such as hitting a breakpoint, has been encountered during the debugging session.</p>
+<p>One of the biggest problems with asynchronous code is that it is nearly impossible to profile well. There is no good general way for profilers to group asynchronous operations by context, collating all subtasks in a synchronous pipeline processing an incoming request. As a result, when you try to profile asynchronous code, you often see idle thread pools even when the application is under load, as there is no way to track the operations waiting for asynchronous I/O.</p>
+<p>Virtual threads solve this, as synchronous operations are associated with the threads they block (even when employing non-blocking I/O under the covers). We’ve modified the <a href="https://blogs.oracle.com/javamagazine/java-flight-recorder-and-jfr-event-streaming-in-java-14">JDK Flight Recorder</a> (JFR) — the foundation of profiling and structured logging in the JDK — to support virtual threads. Blocked virtual threads can be shown in the profiler and time spent on I/O measured and accounted for.</p>
+<p>On the other hand, virtual threads introduce some challenges for observability. For example, how do you make sense of a one-million-thread thread-dump? We believe <a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html#structure-for-serviceability-and-observability">structured concurrency can help with that</a>.</p>
+<h2 id="sidebar-why-virtual">Sidebar: Why “Virtual”?</h2>
+<p>In previous iterations of the project, we called our lightweight, user-mode threads “fibers”, but found ourselves repeatedly explaining that they are not a new concept but a different implementation of a familiar one — the thread. Also, that term is already used for constructs that are similar yet different enough to cause confusion. “Green threads” is similarly tainted by other implementations. We considered the non-specific “lightweight threads,” but “lightweight” is relative and we pictured future JDKs having “micro-threads,” and so we settled on Brian Goetz’s suggestion to call them “virtual threads,” which also tested well in conferences. The name is supposed to evoke a connection with virtual memory: we get more of something (address space, threads) by mapping the virtual construct on top of the concrete one (physical memory, OS threads).</p>
+<p><br></p>
+<h2 id="to-part-2-further-work"><a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part2.html">To Part 2: Further Work</a></h2>
+<p><br><br></p>
+<p><em>Reviewed by Alan Bateman, Chris Plummer, Duncan MacGregor, Andrew Haley, Doug Lea, John Rose, Mark Reinhold, Alex Buckley, and Brian Goetz.</em></p>
+<p><br></p>
+<p>Copyright © 2020 Oracle</p>
+<section class="footnotes" role="doc-endnotes">
+<hr>
+<ol>
+<li id="fn1" role="doc-endnote"><p>Unless the application is CPU-bound, but most server applications are not.<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fnref1" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn2" role="doc-endnote"><p>Many of those languages had good reasons to do that, but they don’t apply to Java. This discussion is beyond the scope of this document, and will be made in another.<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fnref2" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn3" role="doc-endnote"><p>If virtual threads are threads, can they serve as carriers for other virtual threads? In principle yes, but we explicitly forbid such usage, as it is not useful and would usually indicate a mistake.<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fnref3" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn4" role="doc-endnote"><p>See <a href="https://www.jcp.org/en/jsr/detail?id=133"><em>JSR 133: Java Memory Model and Thread Specification Revision</em></a> and <a href="https://www.cs.umd.edu/~pugh/java/memoryModel/jsr-133-faq.html"><em>JSR 133 (Java Memory Model) FAQ</em></a>.<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fnref4" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+<li id="fn5" role="doc-endnote"><p>Unless the application or its libraries use JNI to access native code directly.<a href="https://cr.openjdk.java.net/~rpressler/loom/loom/sol1_part1.html#fnref5" class="footnote-back" role="doc-backlink">↩︎</a></p></li>
+</ol>
+</section>
+
+
+</body></html>
