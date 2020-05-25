@@ -1,0 +1,134 @@
+<!DOCTYPE html>
+<html>
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Website</title>
+<link rel="stylesheet" type="text/css" href="style.css">
+</head>
+<body>
+<header class="p-2 bg-1 fg-2">
+    <nav class="flex flex-row justify-between">
+        <div>
+            <h1 class="inline font-bold mr-2"><a class="" href="#">Space Patrol</a></h1>
+            <ul class="list-none inline text-xs">
+                <li class="inline"><a class="" href="#">create page</a></li>
+            </ul>
+        </div>
+        <div>
+            <ul class="list-none inline text-xs">
+                <li class="inline"><a class="" href="#">admin</a></li>
+                <li class="inline"><a class="" href="#">logout</a></li>
+            </ul>
+        </div>
+    </nav>
+</header>
+<section class="container main-container">
+    <section class="flex flex-row content-start">
+
+        <section class="widget-1 min-h-64 flex flex-col py-4 px-8">
+            <article class="page w-page flex-grow mb-4">
+            <p>
+            On the day appointed for the beginning of the race, you take the <i>Banshee</i> out of the towering granite bay of Tak and into the Inland Sea. Abdul the Butcher's <i>Haveldar</i> cuts quietly through the water beside you. Far to the east is the hostile but rich port of Lagash; to the west is the Scythera Desert, across which the caravan routes to the cities of Kish, Calah and Assur run. To the south is the mountainous isle of Enraki.
+            <p>
+            Will you:
+            <p>
+            <a href="#">Head towards Lagash</a> for a dangerous but daring raid against its coastal shipping?
+            <p>
+            <a href="#">Travel to the Scythera Desert</a> to plunder the rich western caravans?
+            <p>
+            <a href="#">Patrol the Inland Sea</a> via the isle of Enraki?
+            <p>
+            The chair has many mysterious powers, and few dare sit on it. <a class="link-1" href="#">Test your luck.</a>
+            <p>
+            'Mine at last!' cackles your creditor. 'Next time you will not be so quick to gamble with money you do not have.' He and his sailors brush past you, going to claim your prize. Without a ship, you cannot continue your journey.
+            <p>
+            The End
+            </article>
+            <div class="flex flex-row justify-around bg-3 fg-3 p-1">
+                <ul class="list-none text-xs">
+                    <li class="inline"><a class="underline mr-2" href="#">Edit</a></li>
+                    <li class="inline"><a class="underline" href="#">Delete</a></li>
+                </ul>
+            </div>
+        </section>
+
+        <section class="widget-1 h-full ml-4">
+            <article class="w-menu">
+                <h1 class="fg-2 text-center mb-4">start</h1>
+                <a class="block text-center link-2 ml-2 mb-2" href="#">Edit Page</a>
+                <a class="block text-center link-2 ml-2 mb-2" href="#">Delete Page</a>
+            </article>
+        </section>
+<!--
+        <section class="widget-1 h-full">
+            <form class="w-page">
+                <h1 class="fg-2 mb-4">Edit Page: 'Start Voyage'</h1>
+                <div class="mb-2">
+                    <label class="block label-1" for="title">title</label>
+                    <input class="block input-1 w-full fg-2" id="title" name="title" type="text" size="60" value="Start Voyage" readonly>
+                </div>
+
+                <div class="mb-4">
+                    <label class="block label-1" for="body">text</label>
+                    <textarea class="block input-1 w-full fg-2" id="body" name="body" rows="20">
+On the day appointed for the beginning of the race, you take the Banshee out of the towering granite bay of Tak and into the Inland Sea. Abdul the Butcher's Haveldar cuts quietly through the water beside you. Far to the east is the hostile but rich port of Lagash; to the west is the Scythera Desert, across which the caravan routes to the cities of Kish, Calah and Assur run. To the south is the mountainous isle of Enraki.
+
+Will you:
+[[lagash 1|Head towards Lagash]] for a dangerous but daring raid against its coastal shipping?
+[[scythera desert|Travel to the Scythera Desert]] to plunder the rich western caravans?
+[[Patrol the Inland Sea]] via the isle of Enraki?
+                    </textarea>
+                </div>
+
+                <div class="">
+                    <button class="block btn-1 text-gray-800 bg-gray-200" type="submit">submit</button>
+                </div>
+            </form>
+        </section>
+-->
+
+    </section>
+</section>
+
+<section class="container main-container">
+    <section class="flex flex-row content-start">
+        <section class="widget-1 min-h-64">
+            <article class="page w-page">
+            <form class="w-page">
+                <h1 class="fg-2 mb-4">Enter Page Text</h1>
+                <div class="mb-2">
+                    <label class="block label-1" for="title">Title</label>
+                    <input class="block input-1 w-full" id="title" name="title" type="text">
+                </div>
+                <div class="mb-2">
+                    <label class="block label-1" for="body">Body</label>
+                    <textarea class="block input-1 w-full" rows="20" id="body" name="body">
+On the day appointed for the beginning of the race, you take the Banshee out of the towering granite bay of Tak and into the Inland Sea. Abdul the Butcher's Haveldar cuts quietly through the water beside you. Far to the east is the hostile but rich port of Lagash; to the west is the Scythera Desert, across which the caravan routes to the cities of Kish, Calah and Assur run. To the south is the mountainous isle of Enraki.
+
+Will you:
+[Head towards Lagash] for a dangerous but daring raid against its coastal shipping?
+[Travel to the Scythera Desert] to plunder the rich western caravans?
+[Patrol the Inland Sea] via the isle of Enraki?
+</textarea>
+                </div>
+                <div class="">
+                    <button class="block btn-1 text-gray-800 bg-gray-200" type="submit">Save</button>
+                </div>
+            </form>
+            <p class=""><a class="link-2" href="#">Create New Account</a></p>
+        </section>
+    </section>
+</section>
+
+<section class="mx-2 my-4">
+    <h2>hamburger menu:</h2>
+    <div class="self-center" style="width: 15px;">
+        <div style="height: 2px; background-color: darkgray; margin: 3px 0;"></div>
+        <div style="height: 2px; background-color: darkgray; margin: 3px 0;"></div>
+        <div style="height: 2px; background-color: darkgray; margin: 3px 0;"></div>
+    </div>
+</section>
+</body>
+</html>
+

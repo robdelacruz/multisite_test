@@ -1,0 +1,33 @@
+@tailwind base;
+
+@tailwind components;
+
+.input-1 {@apply border py-1 px-2;}
+.btn-sm {@apply rounded px-2;} 
+
+.w-help {width: 100%;}
+.w-pane {width: 100%;}
+
+.col-menu {flex-basis: 15rem;}
+.col-content {flex-basis: 50rem;}
+.col-sidebar {flex-basis: 15rem;}
+
+.page h1, .page h2, .page h3, .page h4 {@apply text-lg;}
+.page p, .page ul, .page ol, .page blockquote, .page pre {@apply mb-4;}
+.page a {@apply underline;}
+.page ul {@apply list-disc list-inside;}
+.page ol {@apply list-decimal list-inside;}
+.page blockquote {@apply bg-gray-700 px-8 py-4;}
+.page pre {@apply bg-gray-200 p-2;}
+.page code {@apply font-mono;}
+.page img[src*="#thumb"] {width: 100px;}
+.page img[src*="#sm"] {width: 150px;}
+.page img[src*="#med"] {width: 180px;}
+.page img[src*="#lg"] {width: 200px;}
+.page img[src*="#xl"] {width: 300px;}
+.page img[src*="#stretch"] {width: 100%;}
+.page img[src*="#left"] {@apply float-left mr-2;}
+.page img[src*="#right"] {@apply float-right ml-2;}
+
+@tailwind utilities;
+
