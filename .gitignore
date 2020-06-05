@@ -1,4 +1,6 @@
 *.swp
 *.db
 t2
+static/style.css
+
 
