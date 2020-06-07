@@ -68,6 +68,7 @@ Initialize new notes database file:
 	log.Fatal(err)
 }
 
+//*** DB functions ***
 func sqlstmt(db *sql.DB, s string) *sql.Stmt {
 	stmt, err := db.Prepare(s)
 	if err != nil {
@@ -75,13 +76,11 @@ func sqlstmt(db *sql.DB, s string) *sql.Stmt {
 	}
 	return stmt
 }
-
 func sqlexec(db *sql.DB, s string, pp ...interface{}) (sql.Result, error) {
 	stmt := sqlstmt(db, s)
 	defer stmt.Close()
 	return stmt.Exec(pp...)
 }
-
 func txstmt(tx *sql.Tx, s string) *sql.Stmt {
 	stmt, err := tx.Prepare(s)
 	if err != nil {
@@ -89,48 +88,41 @@ func txstmt(tx *sql.Tx, s string) *sql.Stmt {
 	}
 	return stmt
 }
-
 func txexec(tx *sql.Tx, s string, pp ...interface{}) (sql.Result, error) {
 	stmt := txstmt(tx, s)
 	defer stmt.Close()
 	return stmt.Exec(pp...)
 }
 
-func createTables(newfile string) {
-	if fileExists(newfile) {
-		s := fmt.Sprintf("File '%s' already exists. Can't initialize it.\n", newfile)
-		fmt.Printf(s)
-		os.Exit(1)
-	}
-
-	db, err := sql.Open("sqlite3", newfile)
-	if err != nil {
-		fmt.Printf("Error opening '%s' (%s)\n", newfile, err)
-		os.Exit(1)
-	}
-
-	ss := []string{
-		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
-		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
-	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
-	}
+//*** Helper functions ***
+func listContains(ss []string, v string) bool {
 	for _, s := range ss {
-		_, err := txexec(tx, s)
-		if err != nil {
-			tx.Rollback()
-			log.Printf("DB error (%s)\n", err)
-			os.Exit(1)
+		if v == s {
+			return true
 		}
 	}
-	err = tx.Commit()
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
+	return false
+}
+func fileExists(file string) bool {
+	_, err := os.Stat(file)
+	if err != nil && os.IsNotExist(err) {
+		return false
+	}
+	return true
+}
+
+// Helper function to make fmt.Fprintf(w, ...) calls shorter.
+// Ex.
+// Replace:
+//   fmt.Fprintf(w, "<p>Some text %s.</p>", str)
+//   fmt.Fprintf(w, "<p>Some other text %s.</p>", str)
+// with the shorter version:
+//   P := makeFprintf(w)
+//   P("<p>Some text %s.</p>", str)
+//   P("<p>Some other text %s.</p>", str)
+func makeFprintf(w io.Writer) func(format string, a ...interface{}) (n int, err error) {
+	return func(format string, a ...interface{}) (n int, err error) {
+		return fmt.Fprintf(w, format, a...)
 	}
 }
 
@@ -178,35 +170,41 @@ func parseArgs(args []string) (map[string]string, []string) {
 	return switches, parms
 }
 
-func listContains(ss []string, v string) bool {
+func createTables(newfile string) {
+	if fileExists(newfile) {
+		s := fmt.Sprintf("File '%s' already exists. Can't initialize it.\n", newfile)
+		fmt.Printf(s)
+		os.Exit(1)
+	}
+
+	db, err := sql.Open("sqlite3", newfile)
+	if err != nil {
+		fmt.Printf("Error opening '%s' (%s)\n", newfile, err)
+		os.Exit(1)
+	}
+
+	ss := []string{
+		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
+		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
 	for _, s := range ss {
-		if v == s {
-			return true
+		_, err := txexec(tx, s)
+		if err != nil {
+			tx.Rollback()
+			log.Printf("DB error (%s)\n", err)
+			os.Exit(1)
 		}
 	}
-	return false
-}
-
-func fileExists(file string) bool {
-	_, err := os.Stat(file)
-	if err != nil && os.IsNotExist(err) {
-		return false
-	}
-	return true
-}
-
-// Helper function to make fmt.Fprintf(w, ...) calls shorter.
-// Ex.
-// Replace:
-//   fmt.Fprintf(w, "<p>Some text %s.</p>", str)
-//   fmt.Fprintf(w, "<p>Some other text %s.</p>", str)
-// with the shorter version:
-//   P := makeFprintf(w)
-//   P("<p>Some text %s.</p>", str)
-//   P("<p>Some other text %s.</p>", str)
-func makeFprintf(w io.Writer) func(format string, a ...interface{}) (n int, err error) {
-	return func(format string, a ...interface{}) (n int, err error) {
-		return fmt.Fprintf(w, format, a...)
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
 	}
 }
 
