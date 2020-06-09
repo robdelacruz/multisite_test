@@ -12,6 +12,8 @@ import (
 	_ "github.com/mattn/go-sqlite3"
 )
 
+type PrintFunc func(format string, a ...interface{}) (n int, err error)
+
 func main() {
 	os.Args = os.Args[1:]
 	sw, parms := parseArgs(os.Args)
@@ -120,7 +122,7 @@ func fileExists(file string) bool {
 //   P := makeFprintf(w)
 //   P("<p>Some text %s.</p>", str)
 //   P("<p>Some other text %s.</p>", str)
-func makeFprintf(w io.Writer) func(format string, a ...interface{}) (n int, err error) {
+func makePrintFunc(w io.Writer) func(format string, a ...interface{}) (n int, err error) {
 	return func(format string, a ...interface{}) (n int, err error) {
 		return fmt.Fprintf(w, format, a...)
 	}
@@ -185,7 +187,10 @@ func createTables(newfile string) {
 
 	ss := []string{
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
+		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
+		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, body TEXT)",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
+		"INSERT INTO book (book_id, name, desc) VALUES (1, 'main', '');",
 	}
 
 	tx, err := db.Begin()
@@ -208,8 +213,7 @@ func createTables(newfile string) {
 	}
 }
 
-func printHead(w io.Writer, jsurls []string, cssurls []string, title string) {
-	P := makeFprintf(w)
+func printHead(P PrintFunc, jsurls []string, cssurls []string, title string) {
 	P("<!DOCTYPE html>\n")
 	P("<html>\n")
 	P("<head>\n")
@@ -224,26 +228,75 @@ func printHead(w io.Writer, jsurls []string, cssurls []string, title string) {
 		P("<script src=\"%s\" defer></script>\n", jsurl)
 	}
 	P("</head>\n")
-	P("<body>\n")
+	P("<body class=\"text-black bg-white text-sm\">\n")
+	P("  <section class=\"flex flex-row py-4 mx-auto\">\n")
 }
 
-func printFoot(w io.Writer) {
-	P := makeFprintf(w)
+func printFoot(P PrintFunc) {
+	P("  </section>\n")
 	P("</body>\n")
 	P("</html>\n")
+}
+
+func printMenuCol(P PrintFunc) {
+	P("  <section class=\"col-menu flex-shrink flex flex-col text-xs px-4\">\n")
+	P("    <div class=\"flex flex-col mb-4\">\n")
+	P("      <h1 class=\"text-lg text-bold\">Site Name here</h1>\n")
+	P("      <div class=\"\">\n")
+	P("        <a class=\"text-gray-800 bg-gray-400 rounded px-2 mr-1\" href=\"#\">robdelacruz</a>\n")
+	P("        <a class=\"text-blue-900\" href=\"#\">logout</a>\n")
+	P("      </div>\n")
+	P("    </div>\n")
+	P("    <ul class=\"list-none mb-2\">\n")
+	P("      <li><p class=\"border-b mb-1\">Content</p></li>\n")
+	P("      <li><a class=\"text-blue-900\" href=\"#\">Create page</a></li>\n")
+	P("      <li><a class=\"text-blue-900\" href=\"#\">Upload file</a></li>\n")
+	P("    </ul>\n")
+	P("  </section>\n")
+}
+
+func printSidebarCol(P PrintFunc) {
+	P("  <section class=\"col-sidebar flex-shrink flex flex-col text-xs px-8 page\">\n")
+	P("    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>\n")
+	P("    <p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit. Integer suscipit lectus vel velit rhoncus, eget condimentum neque imperdiet. Morbi dapibus condimentum convallis. Suspendisse potenti. Aenean fermentum nisi mauris, rhoncus malesuada enim semper semper.</p>\n")
+	//	P("    <p>Suspendisse sit amet molestie nisl, id egestas nulla. Pellentesque eget orci consequat, fermentum lorem eget, condimentum nibh. Vivamus sit amet odio maximus, lobortis nulla vel, luctus nisi. In commodo vel risus id auctor. Duis vulputate euismod mauris a congue. Pellentesque semper dolor id metus eleifend tempus. Ut maximus, nisl in convallis consequat, metus urna tempor mi, non laoreet orci magna sed eros. Etiam sed felis facilisis, fermentum diam fermentum, mattis nunc. Aliquam sed volutpat mauris. Cras pellentesque aliquam nisl non vulputate. Vestibulum tempor quam velit. Curabitur auctor mattis diam non pretium. Integer sagittis nunc in metus luctus, vel tempus mauris mattis. Sed placerat ligula fringilla libero vestibulum, id lacinia lacus suscipit.</p>\n")
+	//	P("    <p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum vitae egestas dui. Etiam euismod et quam sed auctor. Donec vehicula lacus justo, aliquet suscipit tortor tristique sit amet. Etiam nec sem vel orci laoreet ornare id et ipsum. Nulla eu elementum sem. Nam hendrerit ligula diam, nec porttitor dui blandit nec.</p>\n")
+	//	P("    <p>Maecenas molestie ante justo, sed consequat dui sagittis id. Praesent quis erat porta, consequat nulla eu, interdum ex. Etiam elit est, facilisis eget urna ac, accumsan tincidunt tellus. Quisque ut malesuada velit. Aliquam at urna ut mauris faucibus sagittis. Donec quis nulla eget ipsum feugiat blandit. Aenean dapibus consectetur faucibus. Nullam egestas sagittis metus. In sollicitudin augue bibendum lacus lacinia, eget rhoncus est lobortis.</p>\n")
+	P("  </section>\n")
+}
+
+func printNav(P PrintFunc) {
+	P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
+	P("  <div>\n")
+	P("    <span class=\"font-bold mr-1\">Rob's Notebook</span> &gt;\n")
+	P("    <span class=\"ml-1\">Intro</span>\n")
+	P("  </div>\n")
+	P("  <div>\n")
+	P("    <a class=\"inline italic text-xs link-3 no-underline self-center text-blue-900\" href=\"#\">Intro</a>\n")
+	P("  </div>\n")
+	P("</nav>\n")
+}
+
+func printPage(P PrintFunc) {
+	P("<article class=\"page\">\n")
+	P("  <p>You are the commander of Space Rescue Emergency Vessel III. You have spent almost six months alone in space, and your only companion is your computer, Henry. You are steering your ship through a meteorite shower when an urgent signal comes from headquarters- a ship in your sector is under attack by space pirates!</p>\n")
+	P("  <p>You are the commander of the Lacoonian System Rapid Force response team, in charge of protecting all planets in the System. You learn that the Evil Power Master has zeroed in on three planets and plans to destroy them. The safety of the Lacoonian System depends on you!</p>\n")
+	P("</article>\n")
 }
 
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		w.Header().Set("Content-Type", "text/html")
-		printHead(w, nil, nil, "Title")
-		//printNav(w, r, db, login, b, pageid)
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "Title")
+		printMenuCol(P)
 
-		P := makeFprintf(w)
-		P("<section class=\"main-container\">\n")
-		P("  <section class=\"flex flex-row justify-center\">\n")
-		P("  </section>\n")
+		P("<section class=\"col-content flex-grow flex flex-col px-8\">\n")
+		printNav(P)
+		printPage(P)
 		P("</section>\n")
-		printFoot(w)
+
+		printSidebarCol(P)
+		printFoot(P)
 	}
 }
