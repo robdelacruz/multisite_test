@@ -6,6 +6,7 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"net/url"
 	"os"
 	"strings"
 
@@ -13,6 +14,47 @@ import (
 )
 
 type PrintFunc func(format string, a ...interface{}) (n int, err error)
+
+func createTables(newfile string) {
+	if fileExists(newfile) {
+		s := fmt.Sprintf("File '%s' already exists. Can't initialize it.\n", newfile)
+		fmt.Printf(s)
+		os.Exit(1)
+	}
+
+	db, err := sql.Open("sqlite3", newfile)
+	if err != nil {
+		fmt.Printf("Error opening '%s' (%s)\n", newfile, err)
+		os.Exit(1)
+	}
+
+	ss := []string{
+		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
+		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
+		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, title TEXT UNIQUE, body TEXT)",
+		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
+		"INSERT INTO book (book_id, name, desc) VALUES (1, 'main', '');",
+	}
+
+	tx, err := db.Begin()
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
+	for _, s := range ss {
+		_, err := txexec(tx, s)
+		if err != nil {
+			tx.Rollback()
+			log.Printf("DB error (%s)\n", err)
+			os.Exit(1)
+		}
+	}
+	err = tx.Commit()
+	if err != nil {
+		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
+}
 
 func main() {
 	os.Args = os.Args[1:]
@@ -113,15 +155,7 @@ func fileExists(file string) bool {
 	return true
 }
 
-// Helper function to make fmt.Fprintf(w, ...) calls shorter.
-// Ex.
-// Replace:
-//   fmt.Fprintf(w, "<p>Some text %s.</p>", str)
-//   fmt.Fprintf(w, "<p>Some other text %s.</p>", str)
-// with the shorter version:
-//   P := makeFprintf(w)
-//   P("<p>Some text %s.</p>", str)
-//   P("<p>Some other text %s.</p>", str)
+// Return closure enclosing io.Writer.
 func makePrintFunc(w io.Writer) func(format string, a ...interface{}) (n int, err error) {
 	return func(format string, a ...interface{}) (n int, err error) {
 		return fmt.Fprintf(w, format, a...)
@@ -172,45 +206,24 @@ func parseArgs(args []string) (map[string]string, []string) {
 	return switches, parms
 }
 
-func createTables(newfile string) {
-	if fileExists(newfile) {
-		s := fmt.Sprintf("File '%s' already exists. Can't initialize it.\n", newfile)
-		fmt.Printf(s)
-		os.Exit(1)
-	}
-
-	db, err := sql.Open("sqlite3", newfile)
+func unescape(s string) string {
+	s2, err := url.QueryUnescape(s)
 	if err != nil {
-		fmt.Printf("Error opening '%s' (%s)\n", newfile, err)
-		os.Exit(1)
+		return s
 	}
+	return s2
+}
 
-	ss := []string{
-		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
-		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
-		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, body TEXT)",
-		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
-		"INSERT INTO book (book_id, name, desc) VALUES (1, 'main', '');",
+func parsePageUrl(url string) (string, string) {
+	url = strings.Trim(url, "/")
+	ss := strings.Split(url, "/")
+	sslen := len(ss)
+	if sslen == 0 {
+		return "", ""
+	} else if sslen == 1 {
+		return ss[0], ""
 	}
-
-	tx, err := db.Begin()
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
-	}
-	for _, s := range ss {
-		_, err := txexec(tx, s)
-		if err != nil {
-			tx.Rollback()
-			log.Printf("DB error (%s)\n", err)
-			os.Exit(1)
-		}
-	}
-	err = tx.Commit()
-	if err != nil {
-		log.Printf("DB error (%s)\n", err)
-		os.Exit(1)
-	}
+	return ss[0], ss[1]
 }
 
 func printHead(P PrintFunc, jsurls []string, cssurls []string, title string) {
@@ -239,7 +252,7 @@ func printFoot(P PrintFunc) {
 }
 
 func printMenuCol(P PrintFunc) {
-	P("  <section class=\"col-menu flex-shrink flex flex-col text-xs px-4\">\n")
+	P("  <section class=\"col-menu flex flex-col text-xs px-4\">\n")
 	P("    <div class=\"flex flex-col mb-4\">\n")
 	P("      <h1 class=\"text-lg text-bold\">Site Name here</h1>\n")
 	P("      <div class=\"\">\n")
@@ -256,7 +269,7 @@ func printMenuCol(P PrintFunc) {
 }
 
 func printSidebarCol(P PrintFunc) {
-	P("  <section class=\"col-sidebar flex-shrink flex flex-col text-xs px-8 page\">\n")
+	P("  <section class=\"col-sidebar flex flex-col text-xs px-8 page\">\n")
 	P("    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>\n")
 	P("    <p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit. Integer suscipit lectus vel velit rhoncus, eget condimentum neque imperdiet. Morbi dapibus condimentum convallis. Suspendisse potenti. Aenean fermentum nisi mauris, rhoncus malesuada enim semper semper.</p>\n")
 	//	P("    <p>Suspendisse sit amet molestie nisl, id egestas nulla. Pellentesque eget orci consequat, fermentum lorem eget, condimentum nibh. Vivamus sit amet odio maximus, lobortis nulla vel, luctus nisi. In commodo vel risus id auctor. Duis vulputate euismod mauris a congue. Pellentesque semper dolor id metus eleifend tempus. Ut maximus, nisl in convallis consequat, metus urna tempor mi, non laoreet orci magna sed eros. Etiam sed felis facilisis, fermentum diam fermentum, mattis nunc. Aliquam sed volutpat mauris. Cras pellentesque aliquam nisl non vulputate. Vestibulum tempor quam velit. Curabitur auctor mattis diam non pretium. Integer sagittis nunc in metus luctus, vel tempus mauris mattis. Sed placerat ligula fringilla libero vestibulum, id lacinia lacus suscipit.</p>\n")
@@ -265,14 +278,18 @@ func printSidebarCol(P PrintFunc) {
 	P("  </section>\n")
 }
 
-func printNav(P PrintFunc) {
+func printNav(P PrintFunc, bookName, pageTitle string) {
 	P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
 	P("  <div>\n")
-	P("    <span class=\"font-bold mr-1\">Rob's Notebook</span> &gt;\n")
-	P("    <span class=\"ml-1\">Intro</span>\n")
+	P("    <span class=\"font-bold mr-1\">%s</span> &gt;\n", bookName)
+	if pageTitle != "" {
+		P("    <span class=\"ml-1\">%s</span>\n", pageTitle)
+	}
 	P("  </div>\n")
 	P("  <div>\n")
-	P("    <a class=\"inline italic text-xs link-3 no-underline self-center text-blue-900\" href=\"#\">Intro</a>\n")
+	if pageTitle != "" {
+		P("    <a class=\"inline italic text-xs link-3 no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", pageTitle)
+	}
 	P("  </div>\n")
 	P("</nav>\n")
 }
@@ -286,13 +303,20 @@ func printPage(P PrintFunc) {
 
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		bookName, pageTitle := parsePageUrl(r.URL.Path)
+
+		headTitle := pageTitle
+		if headTitle == "" {
+			headTitle = bookName
+		}
+
 		w.Header().Set("Content-Type", "text/html")
 		P := makePrintFunc(w)
-		printHead(P, nil, nil, "Title")
+		printHead(P, nil, nil, headTitle)
 		printMenuCol(P)
 
 		P("<section class=\"col-content flex-grow flex flex-col px-8\">\n")
-		printNav(P)
+		printNav(P, bookName, pageTitle)
 		printPage(P)
 		P("</section>\n")
 
