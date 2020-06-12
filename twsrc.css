@@ -2,8 +2,9 @@
 
 @tailwind components;
 
-.input-1 {@apply border py-1 px-2;}
-.btn-sm {@apply rounded px-2;} 
+.lbl {}
+.input {@apply border py-1 px-2;}
+.btn {@apply border rounded py-1 px-2;} 
 
 .w-help {width: 100%;}
 .w-pane {width: 100%;}
