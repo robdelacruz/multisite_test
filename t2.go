@@ -370,6 +370,97 @@ func handleTxErr(tx *sql.Tx, err error) bool {
 	return false
 }
 
+//*** Html menu template functions ***
+func printSectionMenuHead(P PrintFunc, sitename string, login *User) {
+	P("<section class=\"col-menu flex flex-col text-xs px-4\">\n")
+	P("   <div class=\"flex flex-col mb-4\">\n")
+	P("     <h1 class=\"text-lg text-bold\">%s</h1>\n", sitename)
+	P("     <div class=\"\">\n")
+	if login != nil {
+		P("       <a class=\"text-gray-800 bg-gray-400 rounded px-2 mr-1\" href=\"#\">%s</a>\n", login.Username)
+		P("       <a class=\"text-blue-900\" href=\"/logout\">logout</a>\n")
+	} else {
+		P("       <a class=\"text-blue-900\" href=\"/login\">login</a>\n")
+	}
+	P("    </div>\n")
+	P("  </div>\n")
+}
+func printSectionMenuFoot(P PrintFunc) {
+	P("  </section>\n")
+}
+func printMenuHead(P PrintFunc, title string) {
+	P("<ul class=\"list-none mb-2\">\n")
+	if title != "" {
+		P("  <li><p class=\"border-b mb-1\">%s</p></li>\n", title)
+	}
+}
+func printMenuFoot(P PrintFunc) {
+	P("</ul>\n")
+}
+func printMenuLine(P PrintFunc, href, text string) {
+	P("  <li><a class=\"text-blue-900\" href=\"%s\">%s</a></li>\n", href, text)
+}
+
+//*** Html form template functions ***
+func printFormHead(P PrintFunc) {
+	P("<form class=\"max-w-2xl\">\n")
+}
+func printFormFoot(P PrintFunc) {
+	P("</form>\n")
+}
+func printFormTitle(P PrintFunc, title string) {
+	P("<h1 class=\"border-b border-gray-500 pb-1 mb-4\">%s</h1>\n", title)
+}
+func printFormControlHead(P PrintFunc) {
+	P("<div class=\"mb-2\">\n")
+}
+func printFormControlFoot(P PrintFunc) {
+	P("</div>\n")
+}
+func printFormLabel(P PrintFunc, sfor, lbl string) {
+	P("<label class=\"lbl\" for=\"%s\">%s</label>\n", sfor, lbl)
+}
+func printFormInput(P PrintFunc, sid, val string, size int) {
+	P("<input class=\"input w-full\" id=\"%s\" name=\"%s\" type=\"text\" size=\"%d\" value=\"%s\">\n", sid, sid, size, val)
+}
+func printFormTextarea(P PrintFunc, sid, val string, rows int) {
+	P("<textarea class=\"input w-full\" id=\"%s\" name=\"%s\" rows=\"%d\">%s</textarea>\n", sid, sid, rows, val)
+}
+func printFormButton(P PrintFunc, sid, lbl, stype string) {
+	P("<button class=\"btn\" id=\"%s\" name=\"%s\" type=\"%s\">%s</button>\n", sid, sid, stype, lbl)
+}
+func printFormSubmitButton(P PrintFunc, sid, lbl string) {
+	printFormButton(P, sid, lbl, "submit")
+}
+func printFormControlError(P PrintFunc, errmsg string) {
+	if errmsg != "" {
+		printFormControlHead(P)
+		P("<p class=\"text-red-500 italic\">%s</p>\n", errmsg)
+		printFormControlFoot(P)
+	}
+}
+func printFormControlInput(P PrintFunc, sid, lbl, val string, size int) {
+	printFormControlHead(P)
+	printFormLabel(P, sid, lbl)
+	printFormInput(P, sid, val, size)
+	printFormControlFoot(P)
+}
+func printFormControlTextarea(P PrintFunc, sid, lbl, val string, rows int) {
+	printFormControlHead(P)
+	printFormLabel(P, sid, lbl)
+	printFormTextarea(P, sid, val, rows)
+	printFormControlFoot(P)
+}
+func printFormControlButton(P PrintFunc, sid, lbl, stype string) {
+	printFormControlHead(P)
+	printFormButton(P, sid, lbl, stype)
+	printFormControlFoot(P)
+}
+func printFormControlSubmitButton(P PrintFunc, sid, lbl string) {
+	printFormControlButton(P, sid, lbl, "submit")
+}
+
+//*** Section print functions ***
 func printHead(P PrintFunc, jsurls []string, cssurls []string, title string) {
 	P("<!DOCTYPE html>\n")
 	P("<html>\n")
@@ -388,37 +479,17 @@ func printHead(P PrintFunc, jsurls []string, cssurls []string, title string) {
 	P("<body class=\"text-black bg-white text-sm\">\n")
 	P("  <section class=\"flex flex-row py-4 mx-auto\">\n")
 }
-
 func printFoot(P PrintFunc) {
 	P("  </section>\n")
 	P("</body>\n")
 	P("</html>\n")
 }
-
-func printMenuHead(P PrintFunc) {
-	P("  <section class=\"col-menu flex flex-col text-xs px-4\">\n")
-	P("    <div class=\"flex flex-col mb-4\">\n")
-	P("      <h1 class=\"text-lg text-bold\">Site Name here</h1>\n")
-	P("      <div class=\"\">\n")
-	P("        <a class=\"text-gray-800 bg-gray-400 rounded px-2 mr-1\" href=\"#\">robdelacruz</a>\n")
-	P("        <a class=\"text-blue-900\" href=\"#\">logout</a>\n")
-	P("      </div>\n")
-	P("    </div>\n")
-}
-func printMenuFoot(P PrintFunc) {
-	P("  </section>\n")
-}
-
 func printSidebar(P PrintFunc) {
 	P("  <section class=\"col-sidebar flex flex-col text-xs px-8 page\">\n")
 	P("    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>\n")
 	P("    <p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit. Integer suscipit lectus vel velit rhoncus, eget condimentum neque imperdiet. Morbi dapibus condimentum convallis. Suspendisse potenti. Aenean fermentum nisi mauris, rhoncus malesuada enim semper semper.</p>\n")
-	//	P("    <p>Suspendisse sit amet molestie nisl, id egestas nulla. Pellentesque eget orci consequat, fermentum lorem eget, condimentum nibh. Vivamus sit amet odio maximus, lobortis nulla vel, luctus nisi. In commodo vel risus id auctor. Duis vulputate euismod mauris a congue. Pellentesque semper dolor id metus eleifend tempus. Ut maximus, nisl in convallis consequat, metus urna tempor mi, non laoreet orci magna sed eros. Etiam sed felis facilisis, fermentum diam fermentum, mattis nunc. Aliquam sed volutpat mauris. Cras pellentesque aliquam nisl non vulputate. Vestibulum tempor quam velit. Curabitur auctor mattis diam non pretium. Integer sagittis nunc in metus luctus, vel tempus mauris mattis. Sed placerat ligula fringilla libero vestibulum, id lacinia lacus suscipit.</p>\n")
-	//	P("    <p>Pellentesque habitant morbi tristique senectus et netus et malesuada fames ac turpis egestas. Vestibulum vitae egestas dui. Etiam euismod et quam sed auctor. Donec vehicula lacus justo, aliquet suscipit tortor tristique sit amet. Etiam nec sem vel orci laoreet ornare id et ipsum. Nulla eu elementum sem. Nam hendrerit ligula diam, nec porttitor dui blandit nec.</p>\n")
-	//	P("    <p>Maecenas molestie ante justo, sed consequat dui sagittis id. Praesent quis erat porta, consequat nulla eu, interdum ex. Etiam elit est, facilisis eget urna ac, accumsan tincidunt tellus. Quisque ut malesuada velit. Aliquam at urna ut mauris faucibus sagittis. Donec quis nulla eget ipsum feugiat blandit. Aenean dapibus consectetur faucibus. Nullam egestas sagittis metus. In sollicitudin augue bibendum lacus lacinia, eget rhoncus est lobortis.</p>\n")
 	P("  </section>\n")
 }
-
 func printMainHead(P PrintFunc) {
 	P("<section class=\"col-content flex-grow flex flex-col px-8\">\n")
 }
@@ -450,6 +521,7 @@ func printPage(P PrintFunc) {
 
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		login := getLoginUser(r, db)
 		bookName, pageTitle := parsePageUrl(r.URL.Path)
 
 		headTitle := pageTitle
@@ -461,35 +533,31 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makePrintFunc(w)
 		printHead(P, nil, nil, headTitle)
 
-		printMenuHead(P)
-		P("    <ul class=\"list-none mb-2\">\n")
-		P("      <li><p class=\"border-b mb-1\">Actions</p></li>\n")
+		// Actions and Book/Page list menus
+		printSectionMenuHead(P, "Sitename here", login)
+		printMenuHead(P, "Actions")
 		if bookName == "" {
-			P("      <li><a class=\"text-blue-900\" href=\"/createbook\">Create new book</a></li>\n")
+			printMenuLine(P, "/createbook", "Create new book")
 		} else {
-			P("      <li><a class=\"text-blue-900\" href=\"/createpage\">Create new page</a></li>\n")
+			printMenuLine(P, "/createpage", "Create new page")
 		}
 		if pageTitle != "" {
-			P("      <li><a class=\"text-blue-900\" href=\"/editpage\">Edit page</a></li>\n")
+			printMenuLine(P, "/editpage", "Edit page")
 		}
-		P("    </ul>\n")
-
-		if bookName == "" {
-			P("    <ul class=\"list-none mb-2\">\n")
-			P("      <li><p class=\"border-b mb-1\">Select Book</p></li>\n")
-			P("      <li><a class=\"text-blue-900\" href=\"#\">book 1</a></li>\n")
-			P("      <li><a class=\"text-blue-900\" href=\"#\">book 2</a></li>\n")
-			P("    </ul>\n")
-		} else if pageTitle == "" {
-			P("    <ul class=\"list-none mb-2\">\n")
-			P("      <li><p class=\"border-b mb-1\">Select Page</p></li>\n")
-			P("      <li><a class=\"text-blue-900\" href=\"#\">page 1</a></li>\n")
-			P("      <li><a class=\"text-blue-900\" href=\"#\">page 2</a></li>\n")
-			P("      <li><a class=\"text-blue-900\" href=\"#\">page 3</a></li>\n")
-			P("    </ul>\n")
-		}
-
 		printMenuFoot(P)
+		if bookName == "" {
+			printMenuHead(P, "Select Book")
+			printMenuLine(P, "#", "book 1")
+			printMenuLine(P, "#", "book 2")
+			printMenuFoot(P)
+		} else if pageTitle == "" {
+			printMenuHead(P, "Select Page")
+			printMenuLine(P, "#", "page 1")
+			printMenuLine(P, "#", "page 2")
+			printMenuLine(P, "#", "page 3")
+			printMenuFoot(P)
+		}
+		printSectionMenuFoot(P)
 
 		printMainHead(P)
 		printPageNav(P, bookName, pageTitle)
@@ -535,19 +603,22 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makePrintFunc(w)
 		printHead(P, nil, nil, "Create Page")
 
-		printMenuHead(P)
-		P("    <ul class=\"list-none mb-2\">\n")
-		P("    </ul>\n")
-		printMenuFoot(P)
+		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuFoot(P)
 
 		printMainHead(P)
+		printFormHead(P)
+		printFormTitle(P, "Create new book")
+		printFormControlError(P, errmsg)
+		printFormControlInput(P, "name", "Book Name", b.Name, 60)
+		printFormControlTextarea(P, "desc", "Description", b.Desc, 10)
+		printFormControlSubmitButton(P, "create", "Create")
+		printFormFoot(P)
 		printMainFoot(P)
 
 		printSidebar(P)
 
 		printFoot(P)
-
-		errmsg = errmsg
 	}
 }
 
