@@ -33,6 +33,17 @@ type Page struct {
 	BookName string
 }
 
+var _loremipsum string
+
+func init() {
+	_loremipsum = `<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>
+<blockquote>
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>
+<p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit.</p>
+</blockquote>
+<p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit. Integer suscipit lectus vel velit rhoncus, eget condimentum neque imperdiet. Morbi dapibus condimentum convallis. Suspendisse potenti. Aenean fermentum nisi mauris, rhoncus malesuada enim semper semper.</p>`
+}
+
 type PrintFunc func(format string, a ...interface{}) (n int, err error)
 
 func createTables(newfile string) {
@@ -175,7 +186,7 @@ func queryUserById(db *sql.DB, userid int64) *User {
 }
 func queryBookById(db *sql.DB, bookid int64) *Book {
 	var b Book
-	s := "SELECT book_id, name, desc WHERE book_id = ?"
+	s := "SELECT book_id, name, desc FROM book WHERE book_id = ?"
 	row := db.QueryRow(s, bookid)
 	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
 	if err == sql.ErrNoRows {
@@ -183,6 +194,20 @@ func queryBookById(db *sql.DB, bookid int64) *Book {
 	}
 	if err != nil {
 		fmt.Printf("queryBookById() db error (%s)\n", err)
+		return nil
+	}
+	return &b
+}
+func queryBookByName(db *sql.DB, name string) *Book {
+	var b Book
+	s := "SELECT book_id, name, desc FROM book WHERE name = ?"
+	row := db.QueryRow(s, name)
+	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		fmt.Printf("queryBookByName() db error (%s)\n", err)
 		return nil
 	}
 	return &b
@@ -208,10 +233,6 @@ func createBook(db *sql.DB, b *Book) (int64, error) {
 	}
 	s := "INSERT INTO book (name, desc) VALUES (?, ?)"
 	result, err := txexec(tx, s, b.Name, b.Desc)
-	if handleTxErr(tx, err) {
-		return 0, err
-	}
-	err = tx.Commit()
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
@@ -314,6 +335,9 @@ func unescape(s string) string {
 	}
 	return s2
 }
+func escape(s string) string {
+	return url.QueryEscape(s)
+}
 
 func parsePageUrl(url string) (string, string) {
 	url = strings.Trim(url, "/")
@@ -322,9 +346,9 @@ func parsePageUrl(url string) (string, string) {
 	if sslen == 0 {
 		return "", ""
 	} else if sslen == 1 {
-		return ss[0], ""
+		return unescape(ss[0]), ""
 	}
-	return ss[0], ss[1]
+	return unescape(ss[0]), unescape(ss[1])
 }
 
 func getLoginUser(r *http.Request, db *sql.DB) *User {
@@ -374,7 +398,7 @@ func handleTxErr(tx *sql.Tx, err error) bool {
 func printSectionMenuHead(P PrintFunc, sitename string, login *User) {
 	P("<section class=\"col-menu flex flex-col text-xs px-4\">\n")
 	P("   <div class=\"flex flex-col mb-4\">\n")
-	P("     <h1 class=\"text-lg text-bold\">%s</h1>\n", sitename)
+	P("     <h1 class=\"text-lg text-bold\"><a href=\"/\">%s</a></h1>\n", sitename)
 	P("     <div class=\"\">\n")
 	if login != nil {
 		P("       <a class=\"text-gray-800 bg-gray-400 rounded px-2 mr-1\" href=\"#\">%s</a>\n", login.Username)
@@ -402,8 +426,8 @@ func printMenuLine(P PrintFunc, href, text string) {
 }
 
 //*** Html form template functions ***
-func printFormHead(P PrintFunc) {
-	P("<form class=\"max-w-2xl\">\n")
+func printFormHead(P PrintFunc, action string) {
+	P("<form class=\"max-w-2xl\" method=\"post\" action=\"%s\">\n", action)
 }
 func printFormFoot(P PrintFunc) {
 	P("</form>\n")
@@ -460,7 +484,7 @@ func printFormControlSubmitButton(P PrintFunc, sid, lbl string) {
 	printFormControlButton(P, sid, lbl, "submit")
 }
 
-//*** Section print functions ***
+//*** Other html template functions ***
 func printHead(P PrintFunc, jsurls []string, cssurls []string, title string) {
 	P("<!DOCTYPE html>\n")
 	P("<html>\n")
@@ -485,10 +509,9 @@ func printFoot(P PrintFunc) {
 	P("</html>\n")
 }
 func printSidebar(P PrintFunc) {
-	P("  <section class=\"col-sidebar flex flex-col text-xs px-8 page\">\n")
-	P("    <p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>\n")
-	P("    <p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit. Integer suscipit lectus vel velit rhoncus, eget condimentum neque imperdiet. Morbi dapibus condimentum convallis. Suspendisse potenti. Aenean fermentum nisi mauris, rhoncus malesuada enim semper semper.</p>\n")
-	P("  </section>\n")
+	P("<section class=\"col-sidebar flex flex-col text-xs px-8\">\n")
+	printContentDiv(P, _loremipsum)
+	P("</section>\n")
 }
 func printMainHead(P PrintFunc) {
 	P("<section class=\"col-content flex-grow flex flex-col px-8\">\n")
@@ -496,47 +519,59 @@ func printMainHead(P PrintFunc) {
 func printMainFoot(P PrintFunc) {
 	P("</section>\n")
 }
+func printContentDiv(P PrintFunc, markup string) {
+	// Print html markup wrapped in a <div class="content"> container.
+	P("<div class=\"content\">\n")
+	P(markup)
+	P("</div>\n")
+}
 
-func printPageNav(P PrintFunc, bookName, pageTitle string) {
+func printPageNav(P PrintFunc, b *Book, qBookName, qPageTitle string) {
+	if b == nil && qBookName == "" {
+		return
+	}
+
 	P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
 	P("  <div>\n")
-	P("    <span class=\"font-bold mr-1\">%s</span> &gt;\n", bookName)
-	if pageTitle != "" {
-		P("    <span class=\"ml-1\">%s</span>\n", pageTitle)
+	if b == nil && qBookName != "" {
+		P("    <span class=\"mr-1\">Book '%s' not found.</span>\n", qBookName)
+		P("  </div>\n")
+		P("</nav>\n")
+		return
+	}
+
+	P("    <span class=\"font-bold mr-1\">%s</span> &gt;\n", b.Name)
+	if qPageTitle != "" {
+		P("    <span class=\"ml-1\">%s</span>\n", qPageTitle)
 	}
 	P("  </div>\n")
+
 	P("  <div>\n")
-	if pageTitle != "" {
-		P("    <a class=\"inline italic text-xs link-3 no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", pageTitle)
+	if qPageTitle != "" {
+		P("    <a class=\"inline italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", qPageTitle)
 	}
 	P("  </div>\n")
 	P("</nav>\n")
-}
-func printPage(P PrintFunc) {
-	P("<article class=\"page\">\n")
-	P("  <p>You are the commander of Space Rescue Emergency Vessel III. You have spent almost six months alone in space, and your only companion is your computer, Henry. You are steering your ship through a meteorite shower when an urgent signal comes from headquarters- a ship in your sector is under attack by space pirates!</p>\n")
-	P("  <p>You are the commander of the Lacoonian System Rapid Force response team, in charge of protecting all planets in the System. You learn that the Evil Power Master has zeroed in on three planets and plans to destroy them. The safety of the Lacoonian System depends on you!</p>\n")
-	P("</article>\n")
 }
 
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
 		bookName, pageTitle := parsePageUrl(r.URL.Path)
-
-		headTitle := pageTitle
-		if headTitle == "" {
-			headTitle = bookName
+		b := queryBookByName(db, bookName)
+		if b == nil {
+			pageTitle = ""
 		}
 
 		w.Header().Set("Content-Type", "text/html")
 		P := makePrintFunc(w)
-		printHead(P, nil, nil, headTitle)
+		printHead(P, nil, nil, "t2")
 
-		// Actions and Book/Page list menus
 		printSectionMenuHead(P, "Sitename here", login)
+
+		// Action menu
 		printMenuHead(P, "Actions")
-		if bookName == "" {
+		if b == nil {
 			printMenuLine(P, "/createbook", "Create new book")
 		} else {
 			printMenuLine(P, "/createpage", "Create new page")
@@ -545,23 +580,30 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			printMenuLine(P, "/editpage", "Edit page")
 		}
 		printMenuFoot(P)
-		if bookName == "" {
+
+		if b == nil {
 			printMenuHead(P, "Select Book")
-			printMenuLine(P, "#", "book 1")
-			printMenuLine(P, "#", "book 2")
+			s := "SELECT book_id, name, desc FROM book ORDER BY book_id"
+			rows, err := db.Query(s)
+			if handleDbErr(w, err, "indexhandler") {
+				return
+			}
+			var b Book
+			for rows.Next() {
+				rows.Scan(&b.Bookid, &b.Name, &b.Desc)
+				href := fmt.Sprintf("/%s", escape(b.Name))
+				printMenuLine(P, href, b.Name)
+			}
 			printMenuFoot(P)
 		} else if pageTitle == "" {
-			printMenuHead(P, "Select Page")
-			printMenuLine(P, "#", "page 1")
-			printMenuLine(P, "#", "page 2")
-			printMenuLine(P, "#", "page 3")
-			printMenuFoot(P)
+			P("<p class=\"border-b mb-1\">%s</p>\n", b.Name)
+			printContentDiv(P, b.Desc)
 		}
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, bookName, pageTitle)
-		printPage(P)
+		printPageNav(P, b, bookName, pageTitle)
+		printContentDiv(P, _loremipsum)
 		printMainFoot(P)
 
 		printSidebar(P)
@@ -607,7 +649,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printFormHead(P)
+		printFormHead(P, "/createbook/")
 		printFormTitle(P, "Create new book")
 		printFormControlError(P, errmsg)
 		printFormControlInput(P, "name", "Book Name", b.Name, 60)
