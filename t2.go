@@ -136,7 +136,7 @@ Initialize new notes database file:
 	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "./static/coffee.ico") })
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 	http.HandleFunc("/", indexHandler(db))
-	http.HandleFunc("/createbook/", createbookHandler(db))
+	http.HandleFunc("/action/createbook/", createbookHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -214,7 +214,7 @@ func queryBookByName(db *sql.DB, name string) *Book {
 }
 func queryPageById(db *sql.DB, pageid int64) *Page {
 	var p Page
-	s := "SELECT page_id, book_id, title, body, b.name FROM page p INNER JOIN book b ON p.book_id = b.book_id WHERE page_id = ?"
+	s := "SELECT p.page_id, p.book_id, p.title, p.body, b.name FROM page p INNER JOIN book b ON p.book_id = b.book_id WHERE page_id = ?"
 	row := db.QueryRow(s, pageid)
 	err := row.Scan(&p.Pageid, &p.Bookid, &p.Title, &p.Body, &p.BookName)
 	if err == sql.ErrNoRows {
@@ -222,6 +222,20 @@ func queryPageById(db *sql.DB, pageid int64) *Page {
 	}
 	if err != nil {
 		fmt.Printf("queryPageById() db error (%s)\n", err)
+		return nil
+	}
+	return &p
+}
+func queryPageByTitle(db *sql.DB, bookid int64, title string) *Page {
+	var p Page
+	s := "SELECT p.page_id, p.book_id, p.title, p.body, b.name FROM page p INNER JOIN book b ON p.book_id = b.book_id WHERE p.book_id = ? AND p.title = ?"
+	row := db.QueryRow(s, bookid, title)
+	err := row.Scan(&p.Pageid, &p.Bookid, &p.Title, &p.Body, &p.BookName)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		fmt.Printf("queryPageByTitle() db error (%s)\n", err)
 		return nil
 	}
 	return &p
@@ -526,29 +540,24 @@ func printContentDiv(P PrintFunc, markup string) {
 	P("</div>\n")
 }
 
-func printPageNav(P PrintFunc, b *Book, qBookName, qPageTitle string) {
-	if b == nil && qBookName == "" {
+func printPageNav(P PrintFunc, b *Book, p *Page) {
+	if b == nil && p == nil {
 		return
 	}
 
 	P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
 	P("  <div>\n")
-	if b == nil && qBookName != "" {
-		P("    <span class=\"mr-1\">Book '%s' not found.</span>\n", qBookName)
-		P("  </div>\n")
-		P("</nav>\n")
-		return
-	}
-
-	P("    <span class=\"font-bold mr-1\">%s</span> &gt;\n", b.Name)
-	if qPageTitle != "" {
-		P("    <span class=\"ml-1\">%s</span>\n", qPageTitle)
+	if b != nil {
+		P("    <span class=\"font-bold mr-1\">%s</span> &gt;\n", b.Name)
+		if p != nil {
+			P("    <span class=\"ml-1\">%s</span>\n", p.Title)
+		}
 	}
 	P("  </div>\n")
 
 	P("  <div>\n")
-	if qPageTitle != "" {
-		P("    <a class=\"inline italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", qPageTitle)
+	if p != nil {
+		P("    <a class=\"inline italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", p.Title)
 	}
 	P("  </div>\n")
 	P("</nav>\n")
@@ -558,9 +567,12 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
 		bookName, pageTitle := parsePageUrl(r.URL.Path)
-		b := queryBookByName(db, bookName)
-		if b == nil {
-			pageTitle = ""
+
+		var b *Book
+		var p *Page
+		b = queryBookByName(db, bookName)
+		if b != nil && pageTitle != "" {
+			p = queryPageByTitle(db, b.Bookid, pageTitle)
 		}
 
 		w.Header().Set("Content-Type", "text/html")
@@ -572,12 +584,12 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		// Action menu
 		printMenuHead(P, "Actions")
 		if b == nil {
-			printMenuLine(P, "/createbook", "Create new book")
+			printMenuLine(P, "/action/createbook", "Create new book")
 		} else {
-			printMenuLine(P, "/createpage", "Create new page")
+			printMenuLine(P, "/action/createpage", "Create new page")
 		}
-		if pageTitle != "" {
-			printMenuLine(P, "/editpage", "Edit page")
+		if p != nil {
+			printMenuLine(P, "/action/editpage", "Edit page")
 		}
 		printMenuFoot(P)
 
@@ -602,7 +614,7 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, b, bookName, pageTitle)
+		printPageNav(P, b, p)
 		printContentDiv(P, _loremipsum)
 		printMainFoot(P)
 
@@ -649,7 +661,7 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printFormHead(P, "/createbook/")
+		printFormHead(P, "/action/createbook/")
 		printFormTitle(P, "Create new book")
 		printFormControlError(P, errmsg)
 		printFormControlInput(P, "name", "Book Name", b.Name, 60)
