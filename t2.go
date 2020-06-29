@@ -20,17 +20,15 @@ type User struct {
 	Active   bool
 	Email    string
 }
-type Book struct {
-	Bookid int64
+type Site struct {
+	Siteid string
 	Name   string
 	Desc   string
 }
 type Page struct {
-	Pageid   int64
-	Title    string
-	Body     string
-	Bookid   int64
-	BookName string
+	Pageid int64
+	Title  string
+	Body   string
 }
 
 var _loremipsum string
@@ -61,10 +59,8 @@ func createTables(newfile string) {
 
 	ss := []string{
 		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
-		"CREATE TABLE book (book_id INTEGER PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
-		"CREATE TABLE page (page_id INTEGER PRIMARY KEY NOT NULL, book_id INTEGER NOT NULL, title TEXT UNIQUE, body TEXT)",
+		"CREATE TABLE site (site_id TEXT PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
-		"INSERT INTO book (book_id, name, desc) VALUES (1, 'main', '');",
 	}
 
 	tx, err := db.Begin()
@@ -83,6 +79,17 @@ func createTables(newfile string) {
 	err = tx.Commit()
 	if err != nil {
 		log.Printf("DB error (%s)\n", err)
+		os.Exit(1)
+	}
+
+	site := Site{
+		Siteid: "main",
+		Name:   "Main Website",
+		Desc:   "This is the main website",
+	}
+	err = createSite(db, &site)
+	if err != nil {
+		log.Printf("Error creating site (%s)\n", err)
 		os.Exit(1)
 	}
 }
@@ -107,11 +114,11 @@ func main() {
 	if len(parms) == 0 {
 		s := `Usage:
 
-Start webservice using notes database file:
-	mn <notes.db>
+Start webservice using database file:
+	t2 <sites.db>
 
-Initialize new notes database file:
-	mn -i <notes.db>
+Initialize new database file:
+	t2 -i <sites.db>
 `
 		fmt.Printf(s)
 		os.Exit(0)
@@ -120,7 +127,7 @@ Initialize new notes database file:
 	// Exit if db file doesn't exist.
 	dbfile := parms[0]
 	if !fileExists(dbfile) {
-		s := fmt.Sprintf(`Notes database file '%s' doesn't exist. Create one using:
+		s := fmt.Sprintf(`Sites database file '%s' doesn't exist. Create one using:
 	wb -i <notes.db>
 `, dbfile)
 		fmt.Printf(s)
@@ -136,7 +143,7 @@ Initialize new notes database file:
 	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "./static/coffee.ico") })
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 	http.HandleFunc("/", indexHandler(db))
-	http.HandleFunc("/action/createbook/", createbookHandler(db))
+	http.HandleFunc("/action/createsite/", createsiteHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -184,39 +191,43 @@ func queryUserById(db *sql.DB, userid int64) *User {
 	}
 	return &u
 }
-func queryBookById(db *sql.DB, bookid int64) *Book {
-	var b Book
-	s := "SELECT book_id, name, desc FROM book WHERE book_id = ?"
-	row := db.QueryRow(s, bookid)
-	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
+func querySiteById(db *sql.DB, siteid string) *Site {
+	var site Site
+	s := "SELECT site_id, name, desc FROM site WHERE site_id = ?"
+	row := db.QueryRow(s, siteid)
+	err := row.Scan(&site.Siteid, &site.Name, &site.Desc)
 	if err == sql.ErrNoRows {
 		return nil
 	}
 	if err != nil {
-		fmt.Printf("queryBookById() db error (%s)\n", err)
+		fmt.Printf("querySiteById() db error (%s)\n", err)
 		return nil
 	}
-	return &b
+	return &site
 }
-func queryBookByName(db *sql.DB, name string) *Book {
-	var b Book
-	s := "SELECT book_id, name, desc FROM book WHERE name = ?"
+func querySiteByName(db *sql.DB, name string) *Site {
+	var site Site
+	s := "SELECT site_id, name, desc FROM site WHERE name = ?"
 	row := db.QueryRow(s, name)
-	err := row.Scan(&b.Bookid, &b.Name, &b.Desc)
+	err := row.Scan(&site.Siteid, &site.Name, &site.Desc)
 	if err == sql.ErrNoRows {
 		return nil
 	}
 	if err != nil {
-		fmt.Printf("queryBookByName() db error (%s)\n", err)
+		fmt.Printf("querySiteByName() db error (%s)\n", err)
 		return nil
 	}
-	return &b
+	return &site
 }
-func queryPageById(db *sql.DB, pageid int64) *Page {
+func pagetblName(siteid string) string {
+	return fmt.Sprintf("pages_%s", siteid)
+}
+func queryPageById(db *sql.DB, siteid string, pageid int64) *Page {
 	var p Page
-	s := "SELECT p.page_id, p.book_id, p.title, p.body, b.name FROM page p INNER JOIN book b ON p.book_id = b.book_id WHERE page_id = ?"
+	pagetbl := pagetblName(siteid)
+	s := fmt.Sprintf("SELECT page_id, title, body FROM %s WHERE page_id = ?", pagetbl)
 	row := db.QueryRow(s, pageid)
-	err := row.Scan(&p.Pageid, &p.Bookid, &p.Title, &p.Body, &p.BookName)
+	err := row.Scan(&p.Pageid, &p.Title, &p.Body)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -226,11 +237,12 @@ func queryPageById(db *sql.DB, pageid int64) *Page {
 	}
 	return &p
 }
-func queryPageByTitle(db *sql.DB, bookid int64, title string) *Page {
+func queryPageByTitle(db *sql.DB, siteid string, title string) *Page {
 	var p Page
-	s := "SELECT p.page_id, p.book_id, p.title, p.body, b.name FROM page p INNER JOIN book b ON p.book_id = b.book_id WHERE p.book_id = ? AND p.title = ?"
-	row := db.QueryRow(s, bookid, title)
-	err := row.Scan(&p.Pageid, &p.Bookid, &p.Title, &p.Body, &p.BookName)
+	pagetbl := pagetblName(siteid)
+	s := fmt.Sprintf("SELECT page_id, title, body FROM %s WHERE title = ?", pagetbl)
+	row := db.QueryRow(s, title)
+	err := row.Scan(&p.Pageid, &p.Title, &p.Body)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -240,26 +252,29 @@ func queryPageByTitle(db *sql.DB, bookid int64, title string) *Page {
 	}
 	return &p
 }
-func createBook(db *sql.DB, b *Book) (int64, error) {
+func createSite(db *sql.DB, site *Site) error {
 	tx, err := db.Begin()
 	if err != nil {
-		return 0, err
+		return err
 	}
-	s := "INSERT INTO book (name, desc) VALUES (?, ?)"
-	result, err := txexec(tx, s, b.Name, b.Desc)
+	s := "INSERT INTO site (site_id, name, desc) VALUES (?, ?, ?)"
+	_, err = txexec(tx, s, site.Siteid, site.Name, site.Desc)
 	if handleTxErr(tx, err) {
-		return 0, err
+		return err
 	}
-	bookid, err := result.LastInsertId()
+
+	pagetbl := pagetblName(site.Siteid)
+	s = fmt.Sprintf("CREATE TABLE %s (page_id INTEGER PRIMARY KEY NOT NULL, title TEXT UNIQUE, body TEXT)", pagetbl)
+	_, err = txexec(tx, s)
 	if handleTxErr(tx, err) {
-		return 0, err
+		return err
 	}
 
 	err = tx.Commit()
 	if handleTxErr(tx, err) {
-		return 0, err
+		return err
 	}
-	return bookid, nil
+	return nil
 }
 
 //*** Helper functions ***
@@ -540,25 +555,15 @@ func printContentDiv(P PrintFunc, markup string) {
 	P("</div>\n")
 }
 
-func printPageNav(P PrintFunc, b *Book, p *Page) {
-	if b == nil && p == nil {
-		return
-	}
-
+func printPageNav(P PrintFunc, title1, title2 string) {
 	P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
 	P("  <div>\n")
-	if b != nil {
-		P("    <span class=\"font-bold mr-1\">%s</span> &gt;\n", b.Name)
-		if p != nil {
-			P("    <span class=\"ml-1\">%s</span>\n", p.Title)
-		}
-	}
+	P("    <span class=\"font-bold mr-1\">%s</span> &gt;\n", title1)
+	P("    <span class=\"ml-1\">%s</span>\n", title2)
 	P("  </div>\n")
 
 	P("  <div>\n")
-	if p != nil {
-		P("    <a class=\"inline italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", p.Title)
-	}
+	P("    <a class=\"inline italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", title2)
 	P("  </div>\n")
 	P("</nav>\n")
 }
@@ -566,13 +571,13 @@ func printPageNav(P PrintFunc, b *Book, p *Page) {
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
-		bookName, pageTitle := parsePageUrl(r.URL.Path)
+		qsiteid := r.FormValue("siteid")
+		qtitle := r.FormValue("title")
 
-		var b *Book
 		var p *Page
-		b = queryBookByName(db, bookName)
-		if b != nil && pageTitle != "" {
-			p = queryPageByTitle(db, b.Bookid, pageTitle)
+		site := querySiteById(db, qsiteid)
+		if site != nil {
+			p = queryPageByTitle(db, qsiteid, qtitle)
 		}
 
 		w.Header().Set("Content-Type", "text/html")
@@ -581,11 +586,26 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		printSectionMenuHead(P, "Sitename here", login)
 
+		if site == nil {
+			printMenuHead(P, "Select Site")
+			s := "SELECT site_id, name, desc FROM site ORDER BY site_id"
+			rows, err := db.Query(s)
+			if handleDbErr(w, err, "indexhandler") {
+				return
+			}
+			var site Site
+			for rows.Next() {
+				rows.Scan(&site.Siteid, &site.Name, &site.Desc)
+				href := fmt.Sprintf("/?siteid=%s", escape(site.Siteid))
+				printMenuLine(P, href, site.Name)
+			}
+			printMenuFoot(P)
+		}
+
 		// Action menu
 		printMenuHead(P, "Actions")
-		if b == nil {
-			printMenuLine(P, "/action/createbook", "Create new book")
-		} else {
+		printMenuLine(P, "/action/createsite", "Create new site")
+		if site != nil {
 			printMenuLine(P, "/action/createpage", "Create new page")
 		}
 		if p != nil {
@@ -593,28 +613,14 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 		printMenuFoot(P)
 
-		if b == nil {
-			printMenuHead(P, "Select Book")
-			s := "SELECT book_id, name, desc FROM book ORDER BY book_id"
-			rows, err := db.Query(s)
-			if handleDbErr(w, err, "indexhandler") {
-				return
-			}
-			var b Book
-			for rows.Next() {
-				rows.Scan(&b.Bookid, &b.Name, &b.Desc)
-				href := fmt.Sprintf("/%s", escape(b.Name))
-				printMenuLine(P, href, b.Name)
-			}
-			printMenuFoot(P)
-		} else if pageTitle == "" {
-			P("<p class=\"border-b mb-1\">%s</p>\n", b.Name)
-			printContentDiv(P, b.Desc)
+		if site != nil && qtitle == "" {
+			P("<p class=\"border-b mb-1\">%s</p>\n", site.Name)
+			printContentDiv(P, site.Desc)
 		}
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, b, p)
+		printPageNav(P, qsiteid, qtitle)
 		printContentDiv(P, _loremipsum)
 		printMainFoot(P)
 
@@ -624,10 +630,10 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var errmsg string
-		var b Book
+		var site Site
 
 		login := getLoginUser(r, db)
 		if !validateLogin(w, login) {
@@ -635,16 +641,21 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 
 		if r.Method == "POST" {
-			b.Name = strings.TrimSpace(r.FormValue("name"))
-			b.Desc = strings.TrimSpace(r.FormValue("desc"))
+			site.Siteid = strings.TrimSpace(r.FormValue("siteid"))
+			site.Name = strings.TrimSpace(r.FormValue("name"))
+			site.Desc = strings.TrimSpace(r.FormValue("desc"))
 			for {
-				if b.Name == "" {
-					errmsg = "Please enter a book name."
+				if site.Siteid == "" {
+					errmsg = "Please enter a unique site id."
 					break
 				}
-				_, err := createBook(db, &b)
+				if site.Name == "" {
+					errmsg = "Please enter a site name."
+					break
+				}
+				err := createSite(db, &site)
 				if err != nil {
-					log.Printf("Error creating book (%s)\n", err)
+					log.Printf("Error creating site (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
@@ -661,11 +672,12 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printFormHead(P, "/action/createbook/")
-		printFormTitle(P, "Create new book")
+		printFormHead(P, "/action/createsite/")
+		printFormTitle(P, "Create new site")
 		printFormControlError(P, errmsg)
-		printFormControlInput(P, "name", "Book Name", b.Name, 60)
-		printFormControlTextarea(P, "desc", "Description", b.Desc, 10)
+		printFormControlInput(P, "siteid", "Site ID", site.Siteid, 10)
+		printFormControlInput(P, "name", "Site Name", site.Name, 60)
+		printFormControlTextarea(P, "desc", "Description", site.Desc, 10)
 		printFormControlSubmitButton(P, "create", "Create")
 		printFormFoot(P)
 		printMainFoot(P)
@@ -676,13 +688,13 @@ func createbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func editbookHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		bookid := idtoi(r.FormValue("bookid"))
+		qsiteid := r.FormValue("siteid")
 
-		b := queryBookById(db, bookid)
-		if b == nil {
-			http.Error(w, fmt.Sprintf("Book %d not found.", bookid), 404)
+		site := querySiteById(db, qsiteid)
+		if site == nil {
+			http.Error(w, fmt.Sprintf("Site ID %s not found.", qsiteid), 404)
 			return
 		}
 	}
