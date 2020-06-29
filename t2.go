@@ -21,9 +21,9 @@ type User struct {
 	Email    string
 }
 type Site struct {
-	Siteid string
-	Name   string
-	Desc   string
+	Siteid   int64
+	Sitename string
+	Desc     string
 }
 type Page struct {
 	Pageid int64
@@ -58,8 +58,8 @@ func createTables(newfile string) {
 	}
 
 	ss := []string{
-		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT, password TEXT, active INTEGER NOT NULL, email TEXT, CONSTRAINT unique_username UNIQUE (username));",
-		"CREATE TABLE site (site_id TEXT PRIMARY KEY NOT NULL, name TEXT, desc TEXT);",
+		"CREATE TABLE user (user_id INTEGER PRIMARY KEY NOT NULL, username TEXT UNIQUE, password TEXT, active INTEGER NOT NULL, email TEXT);",
+		"CREATE TABLE site (site_id INTEGER PRIMARY KEY NOT NULL, sitename TEXT UNIQUE, desc TEXT);",
 		"INSERT INTO user (user_id, username, password, active, email) VALUES (1, 'admin', '', 1, '');",
 	}
 
@@ -83,11 +83,10 @@ func createTables(newfile string) {
 	}
 
 	site := Site{
-		Siteid: "main",
-		Name:   "Main Website",
-		Desc:   "This is the main website",
+		Sitename: "main",
+		Desc:     "This is the main website",
 	}
-	err = createSite(db, &site)
+	_, err = createSite(db, &site)
 	if err != nil {
 		log.Printf("Error creating site (%s)\n", err)
 		os.Exit(1)
@@ -144,6 +143,7 @@ Initialize new database file:
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 	http.HandleFunc("/", indexHandler(db))
 	http.HandleFunc("/action/createsite/", createsiteHandler(db))
+	http.HandleFunc("/action/editsite/", editsiteHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -191,11 +191,11 @@ func queryUserById(db *sql.DB, userid int64) *User {
 	}
 	return &u
 }
-func querySiteById(db *sql.DB, siteid string) *Site {
+func querySiteById(db *sql.DB, siteid int64) *Site {
 	var site Site
-	s := "SELECT site_id, name, desc FROM site WHERE site_id = ?"
+	s := "SELECT site_id, sitename, desc FROM site WHERE site_id = ?"
 	row := db.QueryRow(s, siteid)
-	err := row.Scan(&site.Siteid, &site.Name, &site.Desc)
+	err := row.Scan(&site.Siteid, &site.Sitename, &site.Desc)
 	if err == sql.ErrNoRows {
 		return nil
 	}
@@ -205,24 +205,24 @@ func querySiteById(db *sql.DB, siteid string) *Site {
 	}
 	return &site
 }
-func querySiteByName(db *sql.DB, name string) *Site {
+func querySiteBySitename(db *sql.DB, sitename string) *Site {
 	var site Site
-	s := "SELECT site_id, name, desc FROM site WHERE name = ?"
-	row := db.QueryRow(s, name)
-	err := row.Scan(&site.Siteid, &site.Name, &site.Desc)
+	s := "SELECT site_id, sitename, desc FROM site WHERE sitename = ?"
+	row := db.QueryRow(s, sitename)
+	err := row.Scan(&site.Siteid, &site.Sitename, &site.Desc)
 	if err == sql.ErrNoRows {
 		return nil
 	}
 	if err != nil {
-		fmt.Printf("querySiteByName() db error (%s)\n", err)
+		fmt.Printf("querySiteBySitename() db error (%s)\n", err)
 		return nil
 	}
 	return &site
 }
-func pagetblName(siteid string) string {
-	return fmt.Sprintf("pages_%s", siteid)
+func pagetblName(siteid int64) string {
+	return fmt.Sprintf("pages_%d", siteid)
 }
-func queryPageById(db *sql.DB, siteid string, pageid int64) *Page {
+func queryPageById(db *sql.DB, siteid int64, pageid int64) *Page {
 	var p Page
 	pagetbl := pagetblName(siteid)
 	s := fmt.Sprintf("SELECT page_id, title, body FROM %s WHERE page_id = ?", pagetbl)
@@ -237,7 +237,7 @@ func queryPageById(db *sql.DB, siteid string, pageid int64) *Page {
 	}
 	return &p
 }
-func queryPageByTitle(db *sql.DB, siteid string, title string) *Page {
+func queryPageByTitle(db *sql.DB, siteid int64, title string) *Page {
 	var p Page
 	pagetbl := pagetblName(siteid)
 	s := fmt.Sprintf("SELECT page_id, title, body FROM %s WHERE title = ?", pagetbl)
@@ -252,29 +252,33 @@ func queryPageByTitle(db *sql.DB, siteid string, title string) *Page {
 	}
 	return &p
 }
-func createSite(db *sql.DB, site *Site) error {
+func createSite(db *sql.DB, site *Site) (int64, error) {
 	tx, err := db.Begin()
 	if err != nil {
-		return err
+		return 0, err
 	}
-	s := "INSERT INTO site (site_id, name, desc) VALUES (?, ?, ?)"
-	_, err = txexec(tx, s, site.Siteid, site.Name, site.Desc)
+	s := "INSERT INTO site (sitename, desc) VALUES (?, ?)"
+	result, err := txexec(tx, s, site.Sitename, site.Desc)
 	if handleTxErr(tx, err) {
-		return err
+		return 0, err
+	}
+	siteid, err := result.LastInsertId()
+	if handleTxErr(tx, err) {
+		return 0, err
 	}
 
-	pagetbl := pagetblName(site.Siteid)
+	pagetbl := pagetblName(siteid)
 	s = fmt.Sprintf("CREATE TABLE %s (page_id INTEGER PRIMARY KEY NOT NULL, title TEXT UNIQUE, body TEXT)", pagetbl)
 	_, err = txexec(tx, s)
 	if handleTxErr(tx, err) {
-		return err
+		return 0, err
 	}
 
 	err = tx.Commit()
 	if handleTxErr(tx, err) {
-		return err
+		return 0, err
 	}
-	return nil
+	return siteid, nil
 }
 
 //*** Helper functions ***
@@ -571,7 +575,7 @@ func printPageNav(P PrintFunc, title1, title2 string) {
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
-		qsiteid := r.FormValue("siteid")
+		qsiteid := idtoi(r.FormValue("siteid"))
 		qtitle := r.FormValue("title")
 
 		var p *Page
@@ -588,39 +592,49 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		if site == nil {
 			printMenuHead(P, "Select Site")
-			s := "SELECT site_id, name, desc FROM site ORDER BY site_id"
+			s := "SELECT site_id, sitename, desc FROM site ORDER BY site_id"
 			rows, err := db.Query(s)
 			if handleDbErr(w, err, "indexhandler") {
 				return
 			}
 			var site Site
 			for rows.Next() {
-				rows.Scan(&site.Siteid, &site.Name, &site.Desc)
-				href := fmt.Sprintf("/?siteid=%s", escape(site.Siteid))
-				printMenuLine(P, href, site.Name)
+				rows.Scan(&site.Siteid, &site.Sitename, &site.Desc)
+				href := fmt.Sprintf("/?siteid=%d", site.Siteid)
+				printMenuLine(P, href, site.Sitename)
 			}
 			printMenuFoot(P)
 		}
 
-		// Action menu
-		printMenuHead(P, "Actions")
+		if site != nil && qtitle == "" {
+			P("<div class=\"mb-4\">\n")
+			P("<p class=\"border-b mb-1\">%s</p>\n", site.Sitename)
+			printContentDiv(P, site.Desc)
+			P("</div>\n")
+		}
+
+		if site != nil {
+			printMenuHead(P, "Page Menu")
+			printMenuLine(P, "/action/createpage", "Create new page")
+			if p != nil {
+				printMenuLine(P, fmt.Sprintf("/action/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), "Edit page")
+			}
+			printMenuFoot(P)
+		}
+
+		printMenuHead(P, "Sites Menu")
 		printMenuLine(P, "/action/createsite", "Create new site")
 		if site != nil {
-			printMenuLine(P, "/action/createpage", "Create new page")
-		}
-		if p != nil {
-			printMenuLine(P, "/action/editpage", "Edit page")
+			printMenuLine(P, fmt.Sprintf("/action/editsite?siteid=%d", site.Siteid), "Edit site")
 		}
 		printMenuFoot(P)
 
-		if site != nil && qtitle == "" {
-			P("<p class=\"border-b mb-1\">%s</p>\n", site.Name)
-			printContentDiv(P, site.Desc)
-		}
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, qsiteid, qtitle)
+		if site != nil {
+			printPageNav(P, site.Sitename, qtitle)
+		}
 		printContentDiv(P, _loremipsum)
 		printMainFoot(P)
 
@@ -641,19 +655,14 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		}
 
 		if r.Method == "POST" {
-			site.Siteid = strings.TrimSpace(r.FormValue("siteid"))
-			site.Name = strings.TrimSpace(r.FormValue("name"))
+			site.Sitename = strings.TrimSpace(r.FormValue("sitename"))
 			site.Desc = strings.TrimSpace(r.FormValue("desc"))
 			for {
-				if site.Siteid == "" {
-					errmsg = "Please enter a unique site id."
-					break
-				}
-				if site.Name == "" {
+				if site.Sitename == "" {
 					errmsg = "Please enter a site name."
 					break
 				}
-				err := createSite(db, &site)
+				_, err := createSite(db, &site)
 				if err != nil {
 					log.Printf("Error creating site (%s)\n", err)
 					errmsg = "A problem occured. Please try again."
@@ -675,8 +684,7 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormHead(P, "/action/createsite/")
 		printFormTitle(P, "Create new site")
 		printFormControlError(P, errmsg)
-		printFormControlInput(P, "siteid", "Site ID", site.Siteid, 10)
-		printFormControlInput(P, "name", "Site Name", site.Name, 60)
+		printFormControlInput(P, "sitename", "Sitename (enter a unique site name)", site.Sitename, 10)
 		printFormControlTextarea(P, "desc", "Description", site.Desc, 10)
 		printFormControlSubmitButton(P, "create", "Create")
 		printFormFoot(P)
@@ -690,12 +698,59 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
-		qsiteid := r.FormValue("siteid")
+		var errmsg string
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
 
+		qsiteid := idtoi(r.FormValue("siteid"))
 		site := querySiteById(db, qsiteid)
 		if site == nil {
 			http.Error(w, fmt.Sprintf("Site ID %s not found.", qsiteid), 404)
 			return
 		}
+
+		if r.Method == "POST" {
+			site.Sitename = strings.TrimSpace(r.FormValue("sitename"))
+			site.Desc = strings.TrimSpace(r.FormValue("desc"))
+			for {
+				if site.Sitename == "" {
+					errmsg = "Please enter a site name."
+					break
+				}
+
+				s := "UPDATE site SET sitename = ?, desc = ? WHERE site_id = ?"
+				_, err := sqlexec(db, s, site.Sitename, site.Desc, qsiteid)
+				if err != nil {
+					log.Printf("Error updating site (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "Create Page")
+
+		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuFoot(P)
+
+		printMainHead(P)
+		printFormHead(P, fmt.Sprintf("/action/editsite/?siteid=%d", qsiteid))
+		printFormTitle(P, "Edit site")
+		printFormControlError(P, errmsg)
+		printFormControlInput(P, "sitename", "Sitename (unique sitename required)", site.Sitename, 60)
+		printFormControlTextarea(P, "desc", "Description", site.Desc, 10)
+		printFormControlSubmitButton(P, "update", "Update")
+		printFormFoot(P)
+		printMainFoot(P)
+
+		printSidebar(P)
+
+		printFoot(P)
 	}
 }
