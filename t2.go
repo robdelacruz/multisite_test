@@ -606,26 +606,30 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			printMenuFoot(P)
 		}
 
-		if site != nil && qtitle == "" {
-			P("<div class=\"mb-4\">\n")
-			P("<p class=\"border-b mb-1\">%s</p>\n", site.Sitename)
-			printContentDiv(P, site.Desc)
-			P("</div>\n")
-		}
-
 		if site != nil {
 			printMenuHead(P, "Page Menu")
-			printMenuLine(P, "/action/createpage", "Create new page")
+
+			if p == nil && qtitle != "" {
+				printMenuLine(P, fmt.Sprintf("/action/createpage?title=%s", escape(qtitle)), fmt.Sprintf("Create new page '%s'", qtitle))
+			} else {
+				printMenuLine(P, "/action/createpage", "Create new page")
+			}
 			if p != nil {
-				printMenuLine(P, fmt.Sprintf("/action/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), "Edit page")
+				printMenuLine(P, fmt.Sprintf("/action/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), fmt.Sprintf("Edit page '%s'", p.Title))
 			}
 			printMenuFoot(P)
 		}
 
+		//P("<div class=\"mb-4\">\n")
+		//P("<p class=\"border-b mb-1\">%s</p>\n", site.Sitename)
+		//printContentDiv(P, site.Desc)
+		//P("</div>\n")
+
 		printMenuHead(P, "Sites Menu")
-		printMenuLine(P, "/action/createsite", "Create new site")
-		if site != nil {
-			printMenuLine(P, fmt.Sprintf("/action/editsite?siteid=%d", site.Siteid), "Edit site")
+		if site == nil {
+			printMenuLine(P, "/action/createsite", "Create new site")
+		} else {
+			printMenuLine(P, fmt.Sprintf("/action/editsite?siteid=%d", site.Siteid), fmt.Sprintf("Edit site '%s'", site.Sitename))
 		}
 		printMenuFoot(P)
 
@@ -633,13 +637,25 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		printMainHead(P)
 		if site != nil {
-			printPageNav(P, site.Sitename, qtitle)
+			pageTitle := ""
+			if p != nil {
+				pageTitle = p.Title
+			}
+			printPageNav(P, site.Sitename, pageTitle)
 		}
-		printContentDiv(P, _loremipsum)
+
+		if site == nil {
+			printContentDiv(P, "<p>Site not found</p>")
+		} else if qtitle == "" {
+			printContentDiv(P, site.Desc)
+		} else if p == nil {
+			printContentDiv(P, "<p>Page not found</p>")
+		} else {
+			printContentDiv(P, p.Body)
+		}
+
 		printMainFoot(P)
-
 		printSidebar(P)
-
 		printFoot(P)
 	}
 }
