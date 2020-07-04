@@ -142,8 +142,8 @@ Initialize new database file:
 	http.HandleFunc("/favicon.ico", func(w http.ResponseWriter, r *http.Request) { http.ServeFile(w, r, "./static/coffee.ico") })
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.Dir("./static"))))
 	http.HandleFunc("/", indexHandler(db))
-	http.HandleFunc("/action/createsite/", createsiteHandler(db))
-	http.HandleFunc("/action/editsite/", editsiteHandler(db))
+	http.HandleFunc("/createsite/", createsiteHandler(db))
+	http.HandleFunc("/editsite/", editsiteHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -572,6 +572,7 @@ func printPageNav(P PrintFunc, title1, title2 string) {
 	P("</nav>\n")
 }
 
+/*
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
@@ -610,12 +611,12 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			printMenuHead(P, "Page Menu")
 
 			if p == nil && qtitle != "" {
-				printMenuLine(P, fmt.Sprintf("/action/createpage?title=%s", escape(qtitle)), fmt.Sprintf("Create new page '%s'", qtitle))
+				printMenuLine(P, fmt.Sprintf("/createpage?title=%s", escape(qtitle)), fmt.Sprintf("Create new page '%s'", qtitle))
 			} else {
-				printMenuLine(P, "/action/createpage", "Create new page")
+				printMenuLine(P, "/createpage", "Create new page")
 			}
 			if p != nil {
-				printMenuLine(P, fmt.Sprintf("/action/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), fmt.Sprintf("Edit page '%s'", p.Title))
+				printMenuLine(P, fmt.Sprintf("/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), fmt.Sprintf("Edit page '%s'", p.Title))
 			}
 			printMenuFoot(P)
 		}
@@ -627,9 +628,9 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		printMenuHead(P, "Sites Menu")
 		if site == nil {
-			printMenuLine(P, "/action/createsite", "Create new site")
+			printMenuLine(P, "/createsite", "Create new site")
 		} else {
-			printMenuLine(P, fmt.Sprintf("/action/editsite?siteid=%d", site.Siteid), fmt.Sprintf("Edit site '%s'", site.Sitename))
+			printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), fmt.Sprintf("Edit site '%s'", site.Sitename))
 		}
 		printMenuFoot(P)
 
@@ -658,6 +659,76 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSidebar(P)
 		printFoot(P)
 	}
+}
+*/
+
+func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		login := getLoginUser(r, db)
+		qsiteid := idtoi(r.FormValue("siteid"))
+		qtitle := r.FormValue("title")
+
+		var site *Site
+		var p *Page
+		site = querySiteById(db, qsiteid)
+		if site != nil {
+			p = queryPageByTitle(db, qsiteid, qtitle)
+		}
+		p = p
+
+		w.Header().Set("Content-Type", "text/html")
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "t2")
+
+		printSectionMenu(P, db, site, p, qtitle, login)
+		printMain(P, db, site, p, qtitle, login)
+
+		printSidebar(P)
+		printFoot(P)
+	}
+}
+
+func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
+	printSectionMenuHead(P, "Sitename here", login)
+	defer printSectionMenuFoot(P)
+
+	if site == nil {
+		printMenuHead(P, "Actions")
+		printMenuLine(P, "/createsite/", "Create new site")
+		printMenuFoot(P)
+	}
+}
+
+func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
+	printMainHead(P)
+	defer printMainFoot(P)
+
+	if site == nil {
+		printSitesMenu(P, db)
+		return
+	}
+
+	if p != nil {
+		printContentDiv(P, p.Body)
+		return
+	}
+}
+
+func printSitesMenu(P PrintFunc, db *sql.DB) {
+	printMenuHead(P, "Select Site")
+	s := "SELECT site_id, sitename, desc FROM site ORDER BY site_id"
+	rows, err := db.Query(s)
+	if err != nil {
+		log.Printf("printSitesMenu() db err (%s)\n", err)
+		return
+	}
+	var site Site
+	for rows.Next() {
+		rows.Scan(&site.Siteid, &site.Sitename, &site.Desc)
+		href := fmt.Sprintf("/?siteid=%d", site.Siteid)
+		printMenuLine(P, href, site.Sitename)
+	}
+	printMenuFoot(P)
 }
 
 func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
@@ -697,7 +768,7 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printFormHead(P, "/action/createsite/")
+		printFormHead(P, "/createsite/")
 		printFormTitle(P, "Create new site")
 		printFormControlError(P, errmsg)
 		printFormControlInput(P, "sitename", "Sitename (enter a unique site name)", site.Sitename, 10)
@@ -756,7 +827,7 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printFormHead(P, fmt.Sprintf("/action/editsite/?siteid=%d", qsiteid))
+		printFormHead(P, fmt.Sprintf("/editsite/?siteid=%d", qsiteid))
 		printFormTitle(P, "Edit site")
 		printFormControlError(P, errmsg)
 		printFormControlInput(P, "sitename", "Sitename (unique sitename required)", site.Sitename, 60)
