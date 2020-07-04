@@ -12,6 +12,7 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
+	"gopkg.in/russross/blackfriday.v2"
 )
 
 type User struct {
@@ -144,6 +145,8 @@ Initialize new database file:
 	http.HandleFunc("/", indexHandler(db))
 	http.HandleFunc("/createsite/", createsiteHandler(db))
 	http.HandleFunc("/editsite/", editsiteHandler(db))
+	http.HandleFunc("/createpage/", createpageHandler(db))
+	http.HandleFunc("/editpage/", editpageHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -279,6 +282,18 @@ func createSite(db *sql.DB, site *Site) (int64, error) {
 		return 0, err
 	}
 	return siteid, nil
+}
+func createPage(db *sql.DB, site *Site, p *Page) (int64, error) {
+	s := fmt.Sprintf("INSERT INTO %s (title, body) VALUES (?, ?)", pagetblName(site.Siteid))
+	result, err := sqlexec(db, s, p.Title, p.Body)
+	if err != nil {
+		return 0, err
+	}
+	pageid, err := result.LastInsertId()
+	if err != nil {
+		return 0, err
+	}
+	return pageid, nil
 }
 
 //*** Helper functions ***
@@ -426,6 +441,10 @@ func handleTxErr(tx *sql.Tx, err error) bool {
 	}
 	return false
 }
+func parseMarkdown(s string) string {
+	return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(blackfriday.HardLineBreak|blackfriday.BackslashLineBreak)))
+	//return string(blackfriday.Run([]byte(s), blackfriday.WithNoExtensions()))
+}
 
 //*** Html menu template functions ***
 func printSectionMenuHead(P PrintFunc, sitename string, login *User) {
@@ -559,108 +578,26 @@ func printContentDiv(P PrintFunc, markup string) {
 	P("</div>\n")
 }
 
-func printPageNav(P PrintFunc, title1, title2 string) {
+func printPageNav(P PrintFunc, site *Site, pageTitle string) {
+	if site == nil {
+		return
+	}
+
 	P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
 	P("  <div>\n")
-	P("    <span class=\"font-bold mr-1\">%s</span> &gt;\n", title1)
-	P("    <span class=\"ml-1\">%s</span>\n", title2)
+	P("    <span class=\"font-bold mr-1\"><a href=\"/?siteid=%d\">%s</a></span>\n", site.Siteid, site.Sitename)
+	if pageTitle != "" {
+		P(" &gt; <span class=\"ml-1\">%s</span>\n", pageTitle)
+	}
 	P("  </div>\n")
 
-	P("  <div>\n")
-	P("    <a class=\"inline italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", title2)
-	P("  </div>\n")
+	if pageTitle != "" {
+		P("  <div>\n")
+		P("    <a class=\"inline italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", pageTitle)
+		P("  </div>\n")
+	}
 	P("</nav>\n")
 }
-
-/*
-func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		login := getLoginUser(r, db)
-		qsiteid := idtoi(r.FormValue("siteid"))
-		qtitle := r.FormValue("title")
-
-		var p *Page
-		site := querySiteById(db, qsiteid)
-		if site != nil {
-			p = queryPageByTitle(db, qsiteid, qtitle)
-		}
-
-		w.Header().Set("Content-Type", "text/html")
-		P := makePrintFunc(w)
-		printHead(P, nil, nil, "t2")
-
-		printSectionMenuHead(P, "Sitename here", login)
-
-		if site == nil {
-			printMenuHead(P, "Select Site")
-			s := "SELECT site_id, sitename, desc FROM site ORDER BY site_id"
-			rows, err := db.Query(s)
-			if handleDbErr(w, err, "indexhandler") {
-				return
-			}
-			var site Site
-			for rows.Next() {
-				rows.Scan(&site.Siteid, &site.Sitename, &site.Desc)
-				href := fmt.Sprintf("/?siteid=%d", site.Siteid)
-				printMenuLine(P, href, site.Sitename)
-			}
-			printMenuFoot(P)
-		}
-
-		if site != nil {
-			printMenuHead(P, "Page Menu")
-
-			if p == nil && qtitle != "" {
-				printMenuLine(P, fmt.Sprintf("/createpage?title=%s", escape(qtitle)), fmt.Sprintf("Create new page '%s'", qtitle))
-			} else {
-				printMenuLine(P, "/createpage", "Create new page")
-			}
-			if p != nil {
-				printMenuLine(P, fmt.Sprintf("/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), fmt.Sprintf("Edit page '%s'", p.Title))
-			}
-			printMenuFoot(P)
-		}
-
-		//P("<div class=\"mb-4\">\n")
-		//P("<p class=\"border-b mb-1\">%s</p>\n", site.Sitename)
-		//printContentDiv(P, site.Desc)
-		//P("</div>\n")
-
-		printMenuHead(P, "Sites Menu")
-		if site == nil {
-			printMenuLine(P, "/createsite", "Create new site")
-		} else {
-			printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), fmt.Sprintf("Edit site '%s'", site.Sitename))
-		}
-		printMenuFoot(P)
-
-		printSectionMenuFoot(P)
-
-		printMainHead(P)
-		if site != nil {
-			pageTitle := ""
-			if p != nil {
-				pageTitle = p.Title
-			}
-			printPageNav(P, site.Sitename, pageTitle)
-		}
-
-		if site == nil {
-			printContentDiv(P, "<p>Site not found</p>")
-		} else if qtitle == "" {
-			printContentDiv(P, site.Desc)
-		} else if p == nil {
-			printContentDiv(P, "<p>Page not found</p>")
-		} else {
-			printContentDiv(P, p.Body)
-		}
-
-		printMainFoot(P)
-		printSidebar(P)
-		printFoot(P)
-	}
-}
-*/
 
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
@@ -689,14 +626,43 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 }
 
 func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
-	printSectionMenuHead(P, "Sitename here", login)
+	printSectionMenuHead(P, "t2 portal", login)
 	defer printSectionMenuFoot(P)
 
 	if site == nil {
+		printSitesMenu(P, db)
+
 		printMenuHead(P, "Actions")
-		printMenuLine(P, "/createsite/", "Create new site")
+		printMenuLine(P, "/createsite/", "Create Site")
 		printMenuFoot(P)
+		return
 	}
+
+	if qtitle == "" {
+		printMenuHead(P, "Actions")
+		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
+		printMenuLine(P, fmt.Sprintf("/createpage?siteid=%d", site.Siteid), "Create Page")
+		printMenuFoot(P)
+		return
+	}
+
+	if p == nil {
+		printMenuHead(P, "Actions")
+		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
+		href := fmt.Sprintf("/createpage?siteid=%d&title=%s", site.Siteid, escape(qtitle))
+		link := fmt.Sprintf("Create page '%s'", qtitle)
+		printMenuLine(P, href, link)
+		printMenuFoot(P)
+		return
+	}
+
+	printMenuHead(P, "Actions")
+	printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
+	printMenuLine(P, fmt.Sprintf("/createpage?siteid=%d", site.Siteid), "Create Page")
+	href := fmt.Sprintf("/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid)
+	link := fmt.Sprintf("Edit Page '%s'", p.Title)
+	printMenuLine(P, href, link)
+	printMenuFoot(P)
 }
 
 func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
@@ -704,14 +670,25 @@ func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, logi
 	defer printMainFoot(P)
 
 	if site == nil {
-		printSitesMenu(P, db)
+		P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
+		P("  <span class=\"font-bold mr-1\">t2 portal start</span>\n")
+		P("</nav>\n")
 		return
 	}
 
-	if p != nil {
-		printContentDiv(P, p.Body)
+	printPageNav(P, site, qtitle)
+
+	if qtitle == "" {
+		printContentDiv(P, parseMarkdown(site.Desc))
 		return
 	}
+
+	if p == nil {
+		printContentDiv(P, "<p class=\"italic\">(Page not found)</p>\n")
+		return
+	}
+
+	printContentDiv(P, parseMarkdown(p.Body))
 }
 
 func printSitesMenu(P PrintFunc, db *sql.DB) {
@@ -762,14 +739,14 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		P := makePrintFunc(w)
-		printHead(P, nil, nil, "Create Page")
+		printHead(P, nil, nil, "Create Site")
 
 		printSectionMenuHead(P, "Site name here", login)
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
 		printFormHead(P, "/createsite/")
-		printFormTitle(P, "Create new site")
+		printFormTitle(P, "Create site")
 		printFormControlError(P, errmsg)
 		printFormControlInput(P, "sitename", "Sitename (enter a unique site name)", site.Sitename, 10)
 		printFormControlTextarea(P, "desc", "Description", site.Desc, 10)
@@ -794,7 +771,7 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		qsiteid := idtoi(r.FormValue("siteid"))
 		site := querySiteById(db, qsiteid)
 		if site == nil {
-			http.Error(w, fmt.Sprintf("Site ID %s not found.", qsiteid), 404)
+			http.Error(w, fmt.Sprintf("siteid %d not found.", qsiteid), 404)
 			return
 		}
 
@@ -821,7 +798,7 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		w.Header().Set("Content-Type", "text/html")
 		P := makePrintFunc(w)
-		printHead(P, nil, nil, "Create Page")
+		printHead(P, nil, nil, "Edit Site")
 
 		printSectionMenuHead(P, "Site name here", login)
 		printSectionMenuFoot(P)
@@ -832,6 +809,131 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormControlError(P, errmsg)
 		printFormControlInput(P, "sitename", "Sitename (unique sitename required)", site.Sitename, 60)
 		printFormControlTextarea(P, "desc", "Description", site.Desc, 10)
+		printFormControlSubmitButton(P, "update", "Update")
+		printFormFoot(P)
+		printMainFoot(P)
+
+		printSidebar(P)
+
+		printFoot(P)
+	}
+}
+
+func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var errmsg string
+		var p Page
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+
+		qsiteid := idtoi(r.FormValue("siteid"))
+		site := querySiteById(db, qsiteid)
+		if site == nil {
+			http.Error(w, fmt.Sprintf("siteid %d not found.", qsiteid), 404)
+			return
+		}
+
+		p.Title = strings.TrimSpace(r.FormValue("title"))
+		if r.Method == "POST" {
+			p.Body = r.FormValue("body")
+			for {
+				if p.Title == "" {
+					errmsg = "Please enter a page title."
+					break
+				}
+				_, err := createPage(db, site, &p)
+				if err != nil {
+					log.Printf("Error creating page (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, fmt.Sprintf("/?siteid=%d&title=%s", qsiteid, escape(p.Title)), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "Create Page")
+
+		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuFoot(P)
+
+		printMainHead(P)
+		printFormHead(P, fmt.Sprintf("/createpage/?siteid=%d", qsiteid))
+		printFormTitle(P, "Create Page")
+		printFormControlError(P, errmsg)
+		printFormControlInput(P, "title", "Title", p.Title, 10)
+		printFormControlTextarea(P, "body", "Body", p.Body, 25)
+		printFormControlSubmitButton(P, "create", "Create")
+		printFormFoot(P)
+		printMainFoot(P)
+
+		printSidebar(P)
+
+		printFoot(P)
+	}
+}
+
+func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var errmsg string
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+
+		qsiteid := idtoi(r.FormValue("siteid"))
+		qpageid := idtoi(r.FormValue("pageid"))
+		site := querySiteById(db, qsiteid)
+		if site == nil {
+			http.Error(w, fmt.Sprintf("siteid %d not found.", qsiteid), 404)
+			return
+		}
+		p := queryPageById(db, qsiteid, qpageid)
+		if p == nil {
+			http.Error(w, fmt.Sprintf("pageid %d not found.", qpageid), 404)
+			return
+		}
+
+		if r.Method == "POST" {
+			p.Title = strings.TrimSpace(r.FormValue("title"))
+			p.Body = r.FormValue("body")
+			for {
+				if p.Title == "" {
+					errmsg = "Please enter a page title."
+					break
+				}
+
+				s := fmt.Sprintf("UPDATE %s SET title = ?, body = ? WHERE page_id = ?", pagetblName(qsiteid))
+				_, err := sqlexec(db, s, p.Title, p.Body, qpageid)
+				if err != nil {
+					log.Printf("Error updating page (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, fmt.Sprintf("/?siteid=%d&title=%s", qsiteid, escape(p.Title)), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "Edit Page")
+
+		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuFoot(P)
+
+		printMainHead(P)
+		printFormHead(P, fmt.Sprintf("/editpage/?siteid=%d&pageid=%d", qsiteid, qpageid))
+		printFormTitle(P, "Edit Page")
+		printFormControlError(P, errmsg)
+		printFormControlInput(P, "title", "Title", p.Title, 10)
+		printFormControlTextarea(P, "body", "Body", p.Body, 25)
 		printFormControlSubmitButton(P, "update", "Update")
 		printFormFoot(P)
 		printMainFoot(P)
