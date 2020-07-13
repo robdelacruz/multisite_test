@@ -145,8 +145,10 @@ Initialize new database file:
 	http.HandleFunc("/", indexHandler(db))
 	http.HandleFunc("/createsite/", createsiteHandler(db))
 	http.HandleFunc("/editsite/", editsiteHandler(db))
+	http.HandleFunc("/delsite/", delsiteHandler(db))
 	http.HandleFunc("/createpage/", createpageHandler(db))
 	http.HandleFunc("/editpage/", editpageHandler(db))
+	http.HandleFunc("/delpage/", delpageHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -859,6 +861,90 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
+func delsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var errmsg string
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+
+		qsiteid := idtoi(r.FormValue("siteid"))
+		site := querySiteById(db, qsiteid)
+		if site == nil {
+			http.Error(w, fmt.Sprintf("siteid %d not found.", qsiteid), 404)
+			return
+		}
+
+		if r.Method == "POST" {
+			for {
+				tx, err := db.Begin()
+				if err != nil {
+					log.Printf("DB error (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				s := "DELETE FROM site WHERE site_id = ?"
+				_, err = txexec(tx, s, qsiteid)
+				if err != nil {
+					tx.Rollback()
+					log.Printf("Error deleting site (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				s = fmt.Sprintf("DROP TABLE %s", pagetblName(qsiteid))
+				_, err = txexec(tx, s)
+				if err != nil {
+					tx.Rollback()
+					log.Printf("Error deleting pagetbl (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				err = tx.Commit()
+				if err != nil {
+					log.Printf("DB error (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				http.Redirect(w, r, "/", http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "Delete Site")
+
+		printSectionMenuHead(P, "Site name here", login)
+		printMenuHead(P, "Actions")
+		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", qsiteid), "Edit Site")
+		printMenuFoot(P)
+		printSectionMenuFoot(P)
+
+		printMainHead(P)
+		printPageNav(P, site, "")
+		printFormHead(P, fmt.Sprintf("/delsite/?siteid=%d", qsiteid))
+		printFormControlError(P, errmsg)
+		printFormControlHead(P)
+		printFormSubmitButton(P, "delete", "Delete Site")
+		P("<a class=\"ml-2 text-blue-900 no-underline\" href=\"/?siteid=%d\">Cancel</a>\n", qsiteid)
+		printFormControlFoot(P)
+		P("<div class=\"border p-2\">\n")
+		printFormTitle(P, site.Sitename)
+		printContentDiv(P, parseMarkdown(site.Desc))
+		P("</div>\n")
+		printFormFoot(P)
+		printMainFoot(P)
+
+		printSidebar(P)
+
+		printFoot(P)
+	}
+}
+
 func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var errmsg string
@@ -986,6 +1072,74 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		printSidebar(P)
 
+		printFoot(P)
+	}
+}
+
+func delpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var errmsg string
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+
+		qsiteid := idtoi(r.FormValue("siteid"))
+		qpageid := idtoi(r.FormValue("pageid"))
+		site := querySiteById(db, qsiteid)
+		if site == nil {
+			http.Error(w, fmt.Sprintf("siteid %d not found.", qsiteid), 404)
+			return
+		}
+		p := queryPageById(db, qsiteid, qpageid)
+		if p == nil {
+			http.Error(w, fmt.Sprintf("pageid %d not found.", qpageid), 404)
+			return
+		}
+
+		if r.Method == "POST" {
+			for {
+				s := fmt.Sprintf("DELETE FROM %s WHERE page_id = ?", pagetblName(qsiteid))
+				_, err := sqlexec(db, s, qpageid)
+				if err != nil {
+					log.Printf("Error deleting page (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				http.Redirect(w, r, fmt.Sprintf("/?siteid=%d", qsiteid), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "Delete Page")
+
+		printSectionMenuHead(P, "Site name here", login)
+		printMenuHead(P, "Actions")
+		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", qsiteid), "Site Settings")
+		printMenuLine(P, fmt.Sprintf("/editpage?siteid=%d&pageid=%d", qsiteid, qpageid), "Edit Page")
+		printMenuFoot(P)
+		printSectionMenuFoot(P)
+
+		printMainHead(P)
+		printPageNav(P, site, p.Title)
+
+		printFormHead(P, fmt.Sprintf("/delpage/?siteid=%d&pageid=%d", qsiteid, qpageid))
+		printFormControlError(P, errmsg)
+		printFormControlHead(P)
+		printFormSubmitButton(P, "delete", "Delete Page")
+		P("<a class=\"ml-2 text-blue-900 no-underline\" href=\"/?siteid=%d&title=%s\">Cancel</a>\n", qsiteid, escape(p.Title))
+		printFormControlFoot(P)
+		P("<div class=\"border p-2\">\n")
+		printFormTitle(P, p.Title)
+		printContentDiv(P, parseMarkdown(p.Body))
+		P("</div>\n")
+		printFormFoot(P)
+
+		printMainFoot(P)
+		printSidebar(P)
 		printFoot(P)
 	}
 }
