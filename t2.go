@@ -8,6 +8,7 @@ import (
 	"net/http"
 	"net/url"
 	"os"
+	"regexp"
 	"strconv"
 	"strings"
 
@@ -639,11 +640,11 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 	defer printSectionMenuFoot(P)
 
 	if site == nil {
-		printSitesMenu(P, db)
-
 		printMenuHead(P, "Actions")
 		printMenuLine(P, "/createsite/", "Create Site")
 		printMenuFoot(P)
+
+		printSitesMenu(P, db)
 		return
 	}
 
@@ -699,7 +700,20 @@ func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, logi
 		return
 	}
 
+	p.Body = convertLinksToMarkdown(p.Body, site.Siteid)
 	printContentDiv(P, parseMarkdown(p.Body))
+}
+
+func convertLinksToMarkdown(body string, siteid int64) string {
+	sre := `\[\[(.+?)\]\]`
+	re := regexp.MustCompile(sre)
+	//body = re.ReplaceAllString(body, fmt.Sprintf("[$1](/?siteid=%d&title=$1)", siteid))
+	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
+		matches := re.FindStringSubmatch(smatch)
+		title := strings.ReplaceAll(escape(matches[1]), "%", "%%")
+		return fmt.Sprintf("[%s](/?siteid=%d&title=%s)", matches[1], siteid, title)
+	})
+	return body
 }
 
 func printPagesMenu(P PrintFunc, db *sql.DB, siteid int64) {
