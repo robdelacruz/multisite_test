@@ -268,23 +268,30 @@ func createSite(db *sql.DB, site *Site) (int64, error) {
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
-	siteid, err := result.LastInsertId()
+	site.Siteid, err = result.LastInsertId()
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
 
-	pagetbl := pagetblName(siteid)
+	pagetbl := pagetblName(site.Siteid)
 	s = fmt.Sprintf("CREATE TABLE %s (page_id INTEGER PRIMARY KEY NOT NULL, title TEXT UNIQUE, body TEXT)", pagetbl)
 	_, err = txexec(tx, s)
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
 
+	// Create site's front page as pageid 1.
+	//s = fmt.Sprintf("INSERT INTO %s (title, body) VALUES (?, ?)", pagetbl)
+	//_, err = txexec(tx, s, "index", "")
+	//if handleTxErr(tx, err) {
+	//	return 0, err
+	//}
+
 	err = tx.Commit()
 	if handleTxErr(tx, err) {
 		return 0, err
 	}
-	return siteid, nil
+	return site.Siteid, nil
 }
 func createPage(db *sql.DB, site *Site, p *Page) (int64, error) {
 	s := fmt.Sprintf("INSERT INTO %s (title, body) VALUES (?, ?)", pagetblName(site.Siteid))
@@ -450,16 +457,22 @@ func parseMarkdown(s string) string {
 }
 
 //*** Html menu template functions ***
-func printSectionMenuHead(P PrintFunc, sitename string, login *User) {
+func printSectionMenuHead(P PrintFunc, site *Site, login *User) {
 	P("<section class=\"col-menu flex flex-col text-xs px-4\">\n")
-	P("   <div class=\"flex flex-col mb-4\">\n")
-	P("     <h1 class=\"text-lg text-bold\"><a href=\"/\">%s</a></h1>\n", sitename)
-	P("     <div class=\"\">\n")
+	P("  <div class=\"flex flex-col mb-4\">\n")
+	P("    <p class=\"italic\">\n")
+	P("      <a class=\"\" href=\"/\">Home</a>\n")
+	if site != nil {
+		P("      &gt; <a class=\"\" href=\"/?siteid=%d\">%s</a>\n", site.Siteid, site.Sitename)
+	}
+	P("    </p>\n")
+
+	P("    <div class=\"\">\n")
 	if login != nil {
-		P("       <a class=\"text-gray-800 bg-gray-400 rounded px-2 mr-1\" href=\"#\">%s</a>\n", login.Username)
-		P("       <a class=\"text-blue-900\" href=\"/logout\">logout</a>\n")
+		P("      <a class=\"pill mr-1\" href=\"#\">%s</a>\n", login.Username)
+		P("      <a class=\"text-blue-900\" href=\"/logout\">logout</a>\n")
 	} else {
-		P("       <a class=\"text-blue-900\" href=\"/login\">login</a>\n")
+		P("      <a class=\"text-blue-900\" href=\"/login\">login</a>\n")
 	}
 	P("    </div>\n")
 	P("  </div>\n")
@@ -588,23 +601,15 @@ func printContentDiv(P PrintFunc, markup string) {
 	P("</div>\n")
 }
 
-func printPageNav(P PrintFunc, site *Site, pageTitle string) {
-	if site == nil {
+func printPageNav(P PrintFunc, pageTitle string) {
+	if pageTitle == "" {
 		return
 	}
 
 	P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
-	P("  <div>\n")
-	P("    <span class=\"font-bold mr-1\"><a href=\"/?siteid=%d\">%s</a></span>\n", site.Siteid, site.Sitename)
+	P("  <h1 class=\"font-bold text-xl\">%s</h1>\n", pageTitle)
 	if pageTitle != "" {
-		P(" &gt; <span class=\"ml-1\">%s</span>\n", pageTitle)
-	}
-	P("  </div>\n")
-
-	if pageTitle != "" {
-		P("  <div>\n")
-		P("    <a class=\"inline italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", pageTitle)
-		P("  </div>\n")
+		P("  <a class=\"italic text-xs no-underline self-center text-blue-900\" href=\"#\">%s</a>\n", pageTitle)
 	}
 	P("</nav>\n")
 }
@@ -614,6 +619,9 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		login := getLoginUser(r, db)
 		qsiteid := idtoi(r.FormValue("siteid"))
 		qtitle := r.FormValue("title")
+		if qtitle == "" {
+			qtitle = "index"
+		}
 
 		var site *Site
 		var p *Page
@@ -621,7 +629,6 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		if site != nil {
 			p = queryPageByTitle(db, qsiteid, qtitle)
 		}
-		p = p
 
 		w.Header().Set("Content-Type", "text/html")
 		P := makePrintFunc(w)
@@ -636,7 +643,7 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 }
 
 func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
-	printSectionMenuHead(P, "t2 portal", login)
+	printSectionMenuHead(P, site, login)
 	defer printSectionMenuFoot(P)
 
 	if site == nil {
@@ -665,6 +672,8 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 		link := fmt.Sprintf("Create page '%s'", qtitle)
 		printMenuLine(P, href, link)
 		printMenuFoot(P)
+
+		printPagesMenu(P, db, site.Siteid)
 		return
 	}
 
@@ -673,6 +682,8 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 	printMenuLine(P, fmt.Sprintf("/createpage?siteid=%d", site.Siteid), "Create Page")
 	printMenuLine(P, fmt.Sprintf("/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), "Edit Page")
 	printMenuFoot(P)
+
+	printPagesMenu(P, db, site.Siteid)
 }
 
 func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
@@ -680,20 +691,10 @@ func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, logi
 	defer printMainFoot(P)
 
 	if site == nil {
-		P("<nav class=\"flex flex-row justify-between border-b border-gray-500 pb-1 mb-4\">\n")
-		P("  <span class=\"font-bold mr-1\">t2 portal start</span>\n")
-		P("</nav>\n")
 		return
 	}
 
-	printPageNav(P, site, qtitle)
-
-	if qtitle == "" {
-		P("<div class=\"mb-4\">\n")
-		printContentDiv(P, parseMarkdown(site.Desc))
-		P("</div>\n")
-		return
-	}
+	printPageNav(P, qtitle)
 
 	if p == nil {
 		printContentDiv(P, "<p class=\"italic\">(Page not found)</p>\n")
@@ -793,7 +794,7 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makePrintFunc(w)
 		printHead(P, nil, nil, "Create Site")
 
-		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuHead(P, nil, login)
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
@@ -852,14 +853,14 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makePrintFunc(w)
 		printHead(P, nil, nil, "Edit Site")
 
-		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuHead(P, site, login)
 		printMenuHead(P, "Actions")
 		printMenuLine(P, fmt.Sprintf("/delsite?siteid=%d", qsiteid), "Delete Site")
 		printMenuFoot(P)
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, site, "")
+		printPageNav(P, "")
 		printFormHead(P, fmt.Sprintf("/editsite/?siteid=%d", qsiteid))
 		printFormTitle(P, "Edit site")
 		printFormControlError(P, errmsg)
@@ -932,14 +933,14 @@ func delsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makePrintFunc(w)
 		printHead(P, nil, nil, "Delete Site")
 
-		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuHead(P, site, login)
 		printMenuHead(P, "Actions")
 		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", qsiteid), "Edit Site")
 		printMenuFoot(P)
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, site, "")
+		printPageNav(P, "")
 		printFormHead(P, fmt.Sprintf("/delsite/?siteid=%d", qsiteid))
 		printFormControlError(P, errmsg)
 		printFormControlHead(P)
@@ -999,11 +1000,11 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makePrintFunc(w)
 		printHead(P, nil, nil, "Create Page")
 
-		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuHead(P, site, login)
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, site, "")
+		printPageNav(P, "")
 		printFormHead(P, fmt.Sprintf("/createpage/?siteid=%d", qsiteid))
 		printFormTitle(P, "Create Page")
 		printFormControlError(P, errmsg)
@@ -1066,7 +1067,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makePrintFunc(w)
 		printHead(P, nil, nil, "Edit Page")
 
-		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuHead(P, site, login)
 		printMenuHead(P, "Actions")
 		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", qsiteid), "Site Settings")
 		printMenuLine(P, fmt.Sprintf("/delpage?siteid=%d&pageid=%d", qsiteid, qpageid), "Delete Page")
@@ -1074,7 +1075,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, site, p.Title)
+		printPageNav(P, p.Title)
 		printFormHead(P, fmt.Sprintf("/editpage/?siteid=%d&pageid=%d", qsiteid, qpageid))
 		printFormTitle(P, "Edit Page")
 		printFormControlError(P, errmsg)
@@ -1130,7 +1131,7 @@ func delpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		P := makePrintFunc(w)
 		printHead(P, nil, nil, "Delete Page")
 
-		printSectionMenuHead(P, "Site name here", login)
+		printSectionMenuHead(P, site, login)
 		printMenuHead(P, "Actions")
 		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", qsiteid), "Site Settings")
 		printMenuLine(P, fmt.Sprintf("/editpage?siteid=%d&pageid=%d", qsiteid, qpageid), "Edit Page")
@@ -1138,7 +1139,7 @@ func delpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
-		printPageNav(P, site, p.Title)
+		printPageNav(P, p.Title)
 
 		printFormHead(P, fmt.Sprintf("/delpage/?siteid=%d&pageid=%d", qsiteid, qpageid))
 		printFormControlError(P, errmsg)
