@@ -305,6 +305,15 @@ func createPage(db *sql.DB, site *Site, p *Page) (int64, error) {
 	}
 	return pageid, nil
 }
+func createIndexPage(db *sql.DB, site *Site, p *Page) error {
+	// Create page_id 1 to serve as starting page of site.
+	s := fmt.Sprintf("INSERT INTO %s (page_id, title, body) VALUES (?, ?, ?)", pagetblName(site.Siteid))
+	_, err := sqlexec(db, s, 1, p.Title, p.Body)
+	if err != nil {
+		return err
+	}
+	return nil
+}
 
 //*** Helper functions ***
 func listContains(ss []string, v string) bool {
@@ -619,15 +628,36 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		login := getLoginUser(r, db)
 		qsiteid := idtoi(r.FormValue("siteid"))
 		qtitle := r.FormValue("title")
-		if qtitle == "" {
-			qtitle = "index"
-		}
 
 		var site *Site
 		var p *Page
 		site = querySiteById(db, qsiteid)
-		if site != nil {
-			p = queryPageByTitle(db, qsiteid, qtitle)
+
+		for {
+			if site == nil {
+				break
+			}
+			if qtitle != "" {
+				p = queryPageByTitle(db, qsiteid, qtitle)
+				break
+			}
+
+			// No page title requested so show the 'index' page (page_id = 1).
+			p = queryPageById(db, qsiteid, 1)
+			if p == nil {
+				// If no index page, create it.
+				p = &Page{
+					Pageid: 1,
+					Title:  fmt.Sprintf("%s start page", site.Sitename),
+					Body:   "(Edit this page to fill in start page content)",
+				}
+				err := createIndexPage(db, site, p)
+				if handleDbErr(w, err, "indexHandler") {
+					return
+				}
+			}
+			qtitle = p.Title
+			break
 		}
 
 		w.Header().Set("Content-Type", "text/html")
