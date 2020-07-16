@@ -33,13 +33,13 @@ type Page struct {
 	Body   string
 }
 
-var _loremipsum string
+var _loremipsum, _loremipsum2 string
 
 func init() {
 	_loremipsum = `<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>
 <blockquote>
-<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>
-<p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit.</p>
+<p>Lorem ipsum dolor sit amet, consectetur adipiscing elit. Etiam mattis volutpat libero a sodales. Sed a sagittis est. Sed eros nunc, maximus id lectus nec, tempor tincidunt felis. Cras viverra arcu ut tellus sagittis, et pharetra arcu ornare. Cras euismod turpis id auctor posuere. Nunc euismod molestie est, nec congue velit vestibulum rutrum. Etiam vitae consectetur mauris.</p>`
+	_loremipsum2 = `<p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit.</p>
 </blockquote>
 <p>Etiam sodales neque sit amet erat ullamcorper placerat. Curabitur sit amet sapien ac sem convallis efficitur. Class aptent taciti sociosqu ad litora torquent per conubia nostra, per inceptos himenaeos. Cras maximus felis dolor, ac ultricies mauris varius scelerisque. Proin vitae velit a odio eleifend tristique sit amet vitae risus. Curabitur varius sapien ut viverra suscipit. Integer suscipit lectus vel velit rhoncus, eget condimentum neque imperdiet. Morbi dapibus condimentum convallis. Suspendisse potenti. Aenean fermentum nisi mauris, rhoncus malesuada enim semper semper.</p>`
 }
@@ -592,10 +592,15 @@ func printFoot(P PrintFunc) {
 	P("</body>\n")
 	P("</html>\n")
 }
-func printSidebar(P PrintFunc) {
+func printSidebar(P PrintFunc, db *sql.DB) {
 	P("<section class=\"col-sidebar flex flex-col text-xs px-8\">\n")
 	printContentDiv(P, _loremipsum)
 	P("</section>\n")
+}
+func printFooter(P PrintFunc) {
+	P("<div class=\"footer flex flex-row justify-center text-xs lightbg p-1\">\n")
+	P("  <p class=\"\">Made with <a class=\"text-blue-900 underline\" href=\"https://github.com/robdelacruz/t2\">t2</a>.</p>\n")
+	P("</div>\n")
 }
 func printMainHead(P PrintFunc) {
 	P("<section class=\"col-content flex-grow flex flex-col px-8\">\n")
@@ -667,21 +672,23 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printSectionMenu(P, db, site, p, qtitle, login)
 		printMain(P, db, site, p, qtitle, login)
 
-		printSidebar(P)
+		printSidebar(P, db)
 		printFoot(P)
+		printFooter(P)
 	}
 }
 
 func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
 	printSectionMenuHead(P, site, login)
-	defer printSectionMenuFoot(P)
+	defer func() {
+		printSitesMenu(P, db)
+		printSectionMenuFoot(P)
+	}()
 
 	if site == nil {
 		printMenuHead(P, "Actions")
 		printMenuLine(P, "/createsite/", "Create Site")
 		printMenuFoot(P)
-
-		printSitesMenu(P, db)
 		return
 	}
 
@@ -837,7 +844,7 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormFoot(P)
 		printMainFoot(P)
 
-		printSidebar(P)
+		printSidebar(P, db)
 
 		printFoot(P)
 	}
@@ -900,7 +907,7 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormFoot(P)
 		printMainFoot(P)
 
-		printSidebar(P)
+		printSidebar(P, db)
 
 		printFoot(P)
 	}
@@ -984,7 +991,7 @@ func delsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormFoot(P)
 		printMainFoot(P)
 
-		printSidebar(P)
+		printSidebar(P, db)
 
 		printFoot(P)
 	}
@@ -1044,7 +1051,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormFoot(P)
 		printMainFoot(P)
 
-		printSidebar(P)
+		printSidebar(P, db)
 
 		printFoot(P)
 	}
@@ -1115,7 +1122,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormFoot(P)
 		printMainFoot(P)
 
-		printSidebar(P)
+		printSidebar(P, db)
 
 		printFoot(P)
 	}
@@ -1184,7 +1191,7 @@ func delpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormFoot(P)
 
 		printMainFoot(P)
-		printSidebar(P)
+		printSidebar(P, db)
 		printFoot(P)
 	}
 }

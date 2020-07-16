@@ -6,6 +6,7 @@
 .input {@apply border py-1 px-2;}
 .btn {@apply border rounded py-1 px-2 bg-gray-400;} 
 .pill {@apply text-gray-800 bg-gray-400 rounded px-2;}
+.lightbg {@apply bg-gray-200;}
 
 .w-help {width: 100%;}
 .w-pane {width: 100%;}
