@@ -1,6 +1,7 @@
 *.swp
 *.db
+node_modules
+package-lock.json
 t2
 static/style.css
-
 
