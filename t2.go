@@ -13,7 +13,8 @@ import (
 	"strings"
 
 	_ "github.com/mattn/go-sqlite3"
-	"gopkg.in/russross/blackfriday.v2"
+	"github.com/shurcooL/github_flavored_markdown"
+	//"gopkg.in/russross/blackfriday.v2"
 )
 
 type User struct {
@@ -461,8 +462,11 @@ func handleTxErr(tx *sql.Tx, err error) bool {
 	return false
 }
 func parseMarkdown(s string) string {
-	return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(blackfriday.HardLineBreak|blackfriday.BackslashLineBreak)))
-	//return string(blackfriday.Run([]byte(s), blackfriday.WithNoExtensions()))
+	s = strings.ReplaceAll(s, "%", "%%")
+
+	//extensions := blackfriday.CommonExtensions
+	//return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(extensions)))
+	return string(github_flavored_markdown.Markdown([]byte(s)))
 }
 
 //*** Html menu template functions ***
@@ -738,18 +742,17 @@ func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, logi
 		return
 	}
 
-	p.Body = convertLinksToMarkdown(p.Body, site.Siteid)
-	printContentDiv(P, parseMarkdown(p.Body))
+	p.Body = parseMarkdown(p.Body)
+	p.Body = parseLinks(p.Body, site.Siteid)
+	printContentDiv(P, p.Body)
 }
 
-func convertLinksToMarkdown(body string, siteid int64) string {
-	sre := `\[\[(.+?)\]\]`
+func parseLinks(body string, siteid int64) string {
+	sre := `\{\{(.+?)\}\}`
 	re := regexp.MustCompile(sre)
-	//body = re.ReplaceAllString(body, fmt.Sprintf("[$1](/?siteid=%d&title=$1)", siteid))
 	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
 		matches := re.FindStringSubmatch(smatch)
-		title := strings.ReplaceAll(escape(matches[1]), "%", "%%")
-		return fmt.Sprintf("[%s](/?siteid=%d&title=%s)", matches[1], siteid, title)
+		return fmt.Sprintf("<a href=\"/?siteid=%d&title=%s\">%s</a>", siteid, matches[1], matches[1])
 	})
 	return body
 }
