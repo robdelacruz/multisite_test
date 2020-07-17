@@ -407,9 +407,9 @@ func escape(s string) string {
 	return url.QueryEscape(s)
 }
 
-func parsePageUrl(url string) (string, string) {
-	url = strings.Trim(url, "/")
-	ss := strings.Split(url, "/")
+func parsePageUrl(r *http.Request) (string, string) {
+	surl := strings.Trim(r.URL.Path, "/")
+	ss := strings.Split(surl, "/")
 	sslen := len(ss)
 	if sslen == 0 {
 		return "", ""
@@ -417,6 +417,15 @@ func parsePageUrl(url string) (string, string) {
 		return unescape(ss[0]), ""
 	}
 	return unescape(ss[0]), unescape(ss[1])
+}
+func pageUrl(sitename, title string) string {
+	if sitename == "" && title == "" {
+		return "/"
+	}
+	if title == "" {
+		return fmt.Sprintf("/%s", escape(sitename))
+	}
+	return fmt.Sprintf("/%s/%s", escape(sitename), escape(title))
 }
 
 func getLoginUser(r *http.Request, db *sql.DB) *User {
@@ -635,24 +644,25 @@ func printPageNav(P PrintFunc, pageTitle string) {
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		login := getLoginUser(r, db)
-		qsiteid := idtoi(r.FormValue("siteid"))
-		qtitle := r.FormValue("title")
+		qsitename, qtitle := parsePageUrl(r)
 
 		var site *Site
 		var p *Page
-		site = querySiteById(db, qsiteid)
+		if qsitename != "" {
+			site = querySiteBySitename(db, qsitename)
+		}
 
 		for {
 			if site == nil {
 				break
 			}
 			if qtitle != "" {
-				p = queryPageByTitle(db, qsiteid, qtitle)
+				p = queryPageByTitle(db, site.Siteid, qtitle)
 				break
 			}
 
 			// No page title requested so show the 'index' page (page_id = 1).
-			p = queryPageById(db, qsiteid, 1)
+			p = queryPageById(db, site.Siteid, 1)
 			if p == nil {
 				// If no index page, create it.
 				p = &Page{
@@ -702,7 +712,7 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 		printMenuLine(P, fmt.Sprintf("/createpage?siteid=%d", site.Siteid), "Create Page")
 		printMenuFoot(P)
 
-		printPagesMenu(P, db, site.Siteid)
+		printPagesMenu(P, db, site)
 		return
 	}
 
@@ -714,7 +724,7 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 		printMenuLine(P, href, link)
 		printMenuFoot(P)
 
-		printPagesMenu(P, db, site.Siteid)
+		printPagesMenu(P, db, site)
 		return
 	}
 
@@ -724,7 +734,7 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 	printMenuLine(P, fmt.Sprintf("/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), "Edit Page")
 	printMenuFoot(P)
 
-	printPagesMenu(P, db, site.Siteid)
+	printPagesMenu(P, db, site)
 }
 
 func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
@@ -743,23 +753,33 @@ func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, logi
 	}
 
 	p.Body = parseMarkdown(p.Body)
-	p.Body = parseLinks(p.Body, site.Siteid)
+	p.Body = parseLinks(p.Body, site)
 	printContentDiv(P, p.Body)
 }
 
-func parseLinks(body string, siteid int64) string {
-	sre := `\{\{(.+?)\}\}`
+func parseLinks(body string, site *Site) string {
+	if site == nil {
+		return body
+	}
+
+	sre := `\[\[(.+?)\]\]`
 	re := regexp.MustCompile(sre)
 	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
 		matches := re.FindStringSubmatch(smatch)
-		return fmt.Sprintf("<a href=\"/?siteid=%d&title=%s\">%s</a>", siteid, matches[1], matches[1])
+		return fmt.Sprintf("<a href=\"/%s/%s\">%s</a>", escape(site.Sitename), matches[1], matches[1])
 	})
 	return body
 }
 
-func printPagesMenu(P PrintFunc, db *sql.DB, siteid int64) {
+func printPagesMenu(P PrintFunc, db *sql.DB, site *Site) {
 	printMenuHead(P, "Pages")
-	s := fmt.Sprintf("SELECT page_id, title, body FROM %s ORDER BY title", pagetblName(siteid))
+	defer printMenuFoot(P)
+
+	if site == nil {
+		return
+	}
+
+	s := fmt.Sprintf("SELECT page_id, title, body FROM %s ORDER BY title", pagetblName(site.Siteid))
 	rows, err := db.Query(s)
 	if err != nil {
 		log.Printf("printPagesMenu() db err (%s)\n", err)
@@ -769,7 +789,7 @@ func printPagesMenu(P PrintFunc, db *sql.DB, siteid int64) {
 	i := 0
 	for rows.Next() {
 		rows.Scan(&p.Pageid, &p.Title, &p.Body)
-		href := fmt.Sprintf("/?siteid=%d&title=%s", siteid, escape(p.Title))
+		href := fmt.Sprintf("/%s/%s", escape(site.Sitename), escape(p.Title))
 		printMenuLine(P, href, p.Title)
 		i++
 	}
@@ -791,7 +811,7 @@ func printSitesMenu(P PrintFunc, db *sql.DB) {
 	i := 0
 	for rows.Next() {
 		rows.Scan(&site.Siteid, &site.Sitename, &site.Desc)
-		href := fmt.Sprintf("/?siteid=%d", site.Siteid)
+		href := fmt.Sprintf("/%s", escape(site.Sitename))
 		printMenuLine(P, href, site.Sitename)
 		i++
 	}
@@ -825,7 +845,7 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, "/", http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(site.Sitename, ""), http.StatusSeeOther)
 				return
 			}
 		}
@@ -884,7 +904,7 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, "/", http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(site.Sitename, ""), http.StatusSeeOther)
 				return
 			}
 		}
@@ -1031,7 +1051,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, fmt.Sprintf("/?siteid=%d&title=%s", qsiteid, escape(p.Title)), http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(site.Sitename, p.Title), http.StatusSeeOther)
 				return
 			}
 		}
@@ -1098,7 +1118,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, fmt.Sprintf("/?siteid=%d&title=%s", qsiteid, escape(p.Title)), http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(site.Sitename, p.Title), http.StatusSeeOther)
 				return
 			}
 		}
@@ -1162,7 +1182,7 @@ func delpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					errmsg = "A problem occured. Please try again."
 					break
 				}
-				http.Redirect(w, r, fmt.Sprintf("/?siteid=%d", qsiteid), http.StatusSeeOther)
+				http.Redirect(w, r, pageUrl(site.Sitename, ""), http.StatusSeeOther)
 				return
 			}
 		}
