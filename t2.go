@@ -14,7 +14,6 @@ import (
 
 	_ "github.com/mattn/go-sqlite3"
 	"github.com/shurcooL/github_flavored_markdown"
-	//"gopkg.in/russross/blackfriday.v2"
 )
 
 type User struct {
@@ -472,9 +471,6 @@ func handleTxErr(tx *sql.Tx, err error) bool {
 }
 func parseMarkdown(s string) string {
 	s = strings.ReplaceAll(s, "%", "%%")
-
-	//extensions := blackfriday.CommonExtensions
-	//return string(blackfriday.Run([]byte(s), blackfriday.WithExtensions(extensions)))
 	return string(github_flavored_markdown.Markdown([]byte(s)))
 }
 
@@ -709,6 +705,7 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 	if qtitle == "" {
 		printMenuHead(P, "Actions")
 		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
+		printMenuLine(P, fmt.Sprintf("/files?siteid=%d", site.Siteid), "Upload Files")
 		printMenuLine(P, fmt.Sprintf("/createpage?siteid=%d", site.Siteid), "Create Page")
 		printMenuFoot(P)
 
@@ -719,6 +716,7 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 	if p == nil {
 		printMenuHead(P, "Actions")
 		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
+		printMenuLine(P, fmt.Sprintf("/files?siteid=%d", site.Siteid), "Upload Files")
 		href := fmt.Sprintf("/createpage?siteid=%d&title=%s", site.Siteid, escape(qtitle))
 		link := fmt.Sprintf("Create page '%s'", qtitle)
 		printMenuLine(P, href, link)
@@ -730,6 +728,7 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 
 	printMenuHead(P, "Actions")
 	printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
+	printMenuLine(P, fmt.Sprintf("/files?siteid=%d", site.Siteid), "Upload Files")
 	printMenuLine(P, fmt.Sprintf("/createpage?siteid=%d", site.Siteid), "Create Page")
 	printMenuLine(P, fmt.Sprintf("/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), "Edit Page")
 	printMenuFoot(P)
