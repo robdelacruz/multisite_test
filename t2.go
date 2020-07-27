@@ -819,12 +819,20 @@ func parseLinks(body string, site *Site) string {
 		return body
 	}
 
-	sre := `\[\[(.+?)\]\]`
+	sre := `!\[\[(.+?)\]\]`
 	re := regexp.MustCompile(sre)
+	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
+		matches := re.FindStringSubmatch(smatch)
+		return fmt.Sprintf("<img src=\"/~file/%s/%s\">", escape(site.Sitename), matches[1])
+	})
+
+	sre = `\[\[(.+?)\]\]`
+	re = regexp.MustCompile(sre)
 	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
 		matches := re.FindStringSubmatch(smatch)
 		return fmt.Sprintf("<a href=\"/%s/%s\">%s</a>", escape(site.Sitename), matches[1], matches[1])
 	})
+
 	return body
 }
 
