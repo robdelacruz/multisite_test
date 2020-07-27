@@ -4,6 +4,7 @@ import (
 	"database/sql"
 	"fmt"
 	"io"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"net/url"
@@ -31,6 +32,10 @@ type Page struct {
 	Pageid int64
 	Title  string
 	Body   string
+}
+type File struct {
+	Filename string
+	Bytes    []byte
 }
 
 var _loremipsum, _loremipsum2 string
@@ -150,6 +155,8 @@ Initialize new database file:
 	http.HandleFunc("/createpage/", createpageHandler(db))
 	http.HandleFunc("/editpage/", editpageHandler(db))
 	http.HandleFunc("/delpage/", delpageHandler(db))
+	http.HandleFunc("/files/", filesHandler(db))
+	http.HandleFunc("/~file/", fileHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -228,6 +235,9 @@ func querySiteBySitename(db *sql.DB, sitename string) *Site {
 func pagetblName(siteid int64) string {
 	return fmt.Sprintf("pages_%d", siteid)
 }
+func filetblName(siteid int64) string {
+	return fmt.Sprintf("files_%d", siteid)
+}
 func queryPageById(db *sql.DB, siteid int64, pageid int64) *Page {
 	var p Page
 	pagetbl := pagetblName(siteid)
@@ -258,6 +268,21 @@ func queryPageByTitle(db *sql.DB, siteid int64, title string) *Page {
 	}
 	return &p
 }
+func queryFileByFilename(db *sql.DB, siteid int64, filename string) *File {
+	var file File
+	filetbl := filetblName(siteid)
+	s := fmt.Sprintf("SELECT filename, bytes FROM %s WHERE filename = ?", filetbl)
+	row := db.QueryRow(s, filename)
+	err := row.Scan(&file.Filename, &file.Bytes)
+	if err == sql.ErrNoRows {
+		return nil
+	}
+	if err != nil {
+		fmt.Printf("queryFileByFilename() db error (%s)\n", err)
+		return nil
+	}
+	return &file
+}
 func createSite(db *sql.DB, site *Site) (int64, error) {
 	tx, err := db.Begin()
 	if err != nil {
@@ -280,12 +305,12 @@ func createSite(db *sql.DB, site *Site) (int64, error) {
 		return 0, err
 	}
 
-	// Create site's front page as pageid 1.
-	//s = fmt.Sprintf("INSERT INTO %s (title, body) VALUES (?, ?)", pagetbl)
-	//_, err = txexec(tx, s, "index", "")
-	//if handleTxErr(tx, err) {
-	//	return 0, err
-	//}
+	filetbl := filetblName(site.Siteid)
+	s = fmt.Sprintf("CREATE TABLE %s (file_id INTEGER PRIMARY KEY NOT NULL, filename TEXT UNIQUE, bytes BLOB)", filetbl)
+	_, err = txexec(tx, s)
+	if handleTxErr(tx, err) {
+		return 0, err
+	}
 
 	err = tx.Commit()
 	if handleTxErr(tx, err) {
@@ -426,6 +451,27 @@ func pageUrl(sitename, title string) string {
 	}
 	return fmt.Sprintf("/%s/%s", escape(sitename), escape(title))
 }
+func parseFileUrl(r *http.Request) (string, string) {
+	// file url takes the form "/~file/<sitename>/<filename>"
+	surl := strings.Trim(r.URL.Path, "/")
+	ss := strings.Split(surl, "/")
+	sslen := len(ss)
+	if sslen == 0 || sslen == 1 {
+		return "", ""
+	} else if sslen == 2 {
+		return unescape(ss[1]), ""
+	}
+	return unescape(ss[1]), unescape(ss[2])
+}
+func fileUrl(sitename, filename string) string {
+	if sitename == "" && filename == "" {
+		return "/"
+	}
+	if filename == "" {
+		return fmt.Sprintf("/~file/%s", escape(sitename))
+	}
+	return fmt.Sprintf("/~file/%s/%s", escape(sitename), escape(filename))
+}
 
 func getLoginUser(r *http.Request, db *sql.DB) *User {
 	c, err := r.Cookie("userid")
@@ -481,7 +527,7 @@ func printSectionMenuHead(P PrintFunc, site *Site, login *User) {
 	P("    <p class=\"italic\">\n")
 	P("      <a class=\"\" href=\"/\">Home</a>\n")
 	if site != nil {
-		P("      &gt; <a class=\"\" href=\"/?siteid=%d\">%s</a>\n", site.Siteid, site.Sitename)
+		P("      &gt; <a class=\"\" href=\"/%s\">%s</a>\n", escape(site.Sitename), site.Sitename)
 	}
 	P("    </p>\n")
 
@@ -518,6 +564,9 @@ func printMenuText(P PrintFunc, text string) {
 func printFormHead(P PrintFunc, action string) {
 	P("<form class=\"max-w-2xl\" method=\"post\" action=\"%s\">\n", action)
 }
+func printFormHeadMultipart(P PrintFunc, action string) {
+	P("<form class=\"max-w-2xl\" method=\"post\" action=\"%s\" enctype=\"multipart/form-data\">\n", action)
+}
 func printFormFoot(P PrintFunc) {
 	P("</form>\n")
 }
@@ -540,6 +589,9 @@ func printFormLabel(P PrintFunc, sfor, lbl string) {
 func printFormInput(P PrintFunc, sid, val string, size int) {
 	P("<input class=\"input w-full\" id=\"%s\" name=\"%s\" type=\"text\" size=\"%d\" value=\"%s\">\n", sid, sid, size, val)
 }
+func printFormFile(P PrintFunc, sid string) {
+	P("<input class=\"input w-full\" id=\"%s\" name=\"%s\" type=\"file\">\n", sid, sid)
+}
 func printFormTextarea(P PrintFunc, sid, val string, rows int) {
 	P("<textarea class=\"input w-full\" id=\"%s\" name=\"%s\" rows=\"%d\">%s</textarea>\n", sid, sid, rows, val)
 }
@@ -560,6 +612,12 @@ func printFormControlInput(P PrintFunc, sid, lbl, val string, size int) {
 	printFormControlHead(P)
 	printFormLabel(P, sid, lbl)
 	printFormInput(P, sid, val, size)
+	printFormControlFoot(P)
+}
+func printFormControlFile(P PrintFunc, sid, lbl string) {
+	printFormControlHead(P)
+	printFormLabel(P, sid, lbl)
+	printFormFile(P, sid)
 	printFormControlFoot(P)
 }
 func printFormControlTextarea(P PrintFunc, sid, lbl, val string, rows int) {
@@ -1215,5 +1273,138 @@ func delpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printMainFoot(P)
 		printSidebar(P, db)
 		printFoot(P)
+	}
+}
+
+func filesHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var errmsg string
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+
+		qsiteid := idtoi(r.FormValue("siteid"))
+		site := querySiteById(db, qsiteid)
+		if site == nil {
+			http.Error(w, fmt.Sprintf("siteid %d not found.", qsiteid), 404)
+			return
+		}
+
+		if r.Method == "POST" {
+			for {
+				file, header, err := r.FormFile("file")
+				if file != nil {
+					defer file.Close()
+				}
+				if err != nil {
+					log.Printf("files: IO error reading file: %s\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+				if header == nil {
+					errmsg = "Please select a file to upload."
+					break
+				}
+
+				bs, err := ioutil.ReadAll(file)
+				if err != nil {
+					log.Printf("files: IO error reading file: %s\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				s := fmt.Sprintf("INSERT INTO %s (filename, bytes) VALUES (?, ?);", filetblName(qsiteid))
+				_, err = sqlexec(db, s, header.Filename, bs)
+				if err != nil {
+					log.Printf("files: DB error inserting file contents: %s\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				http.Redirect(w, r, fmt.Sprintf("/files/?siteid=%d", qsiteid), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "Files")
+
+		printSectionMenuHead(P, site, login)
+		printSectionMenuFoot(P)
+
+		printMainHead(P)
+		printPageNav(P, "")
+		printFormHeadMultipart(P, fmt.Sprintf("/files/?siteid=%d", qsiteid))
+		printFormTitle(P, "Files")
+		printFormControlError(P, errmsg)
+		printFormControlFile(P, "file", "Upload file")
+		printFormControlSubmitButton(P, "upload", "Upload")
+		printFormFoot(P)
+
+		s := fmt.Sprintf("SELECT filename FROM %s ORDER BY filename", filetblName(qsiteid))
+		rows, err := db.Query(s)
+		if handleDbErr(w, err, "filesHandler") {
+			return
+		}
+		var filename string
+		printMenuHead(P, "Files")
+		for rows.Next() {
+			rows.Scan(&filename)
+			printMenuLine(P, fileUrl(site.Sitename, filename), filename)
+		}
+		printMenuFoot(P)
+
+		printMainFoot(P)
+
+		printSidebar(P, db)
+
+		printFoot(P)
+	}
+}
+
+func fileext(filename string) string {
+	ss := strings.Split(filename, ".")
+	if len(ss) < 2 {
+		return ""
+	}
+	return strings.ToLower(ss[len(ss)-1])
+}
+func fileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		qsitename, qfilename := parseFileUrl(r)
+		if qsitename == "" || qfilename == "" {
+			http.Error(w, fmt.Sprintf("Bad request (%s)", r.URL.Path), 400)
+			return
+		}
+
+		site := querySiteBySitename(db, qsitename)
+		if site == nil {
+			http.Error(w, fmt.Sprintf("sitename %s not found.", qsitename), 400)
+			return
+		}
+		file := queryFileByFilename(db, site.Siteid, qfilename)
+		if file == nil {
+			http.Error(w, fmt.Sprintf("filename %s not found.", qfilename), 400)
+			return
+		}
+
+		ext := fileext(file.Filename)
+		if ext == "" {
+			w.Header().Set("Content-Type", "application")
+		} else if ext == "png" || ext == "gif" || ext == "bmp" {
+			w.Header().Set("Content-Type", fmt.Sprintf("image/%s", ext))
+		} else if ext == "jpg" || ext == "jpeg" {
+			w.Header().Set("Content-Type", fmt.Sprintf("image/jpeg"))
+		} else {
+			w.Header().Set("Content-Type", fmt.Sprintf("application/%s", ext))
+		}
+
+		_, err := w.Write(file.Bytes)
+		if handleDbErr(w, err, "fileHandler") {
+			return
+		}
 	}
 }
