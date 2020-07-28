@@ -667,11 +667,12 @@ func printFoot(P PrintFunc) {
 }
 func printSidebar(P PrintFunc, db *sql.DB) {
 	P("<section class=\"col-sidebar flex flex-col text-xs px-8\">\n")
-	printContentDiv(P, _loremipsum)
+	printSitesMenu(P, db)
+	//printContentDiv(P, _loremipsum)
 	P("</section>\n")
 }
 func printFooter(P PrintFunc) {
-	P("<div class=\"footer flex flex-row justify-center text-xs lightbg p-1\">\n")
+	P("<div class=\"footer flex flex-row justify-center text-xs p-1\">\n")
 	P("  <p class=\"\">Made with <a class=\"text-blue-900 underline\" href=\"https://github.com/robdelacruz/t2\">t2</a>.</p>\n")
 	P("</div>\n")
 }
@@ -760,7 +761,8 @@ func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
 	printSectionMenuHead(P, site, login)
 	defer func() {
-		printSitesMenu(P, db)
+		printPagesMenu(P, db, site)
+		printFilesMenu(P, db, site)
 		printSectionMenuFoot(P)
 	}()
 
@@ -774,35 +776,29 @@ func printSectionMenu(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle strin
 	if qtitle == "" {
 		printMenuHead(P, "Actions")
 		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
-		printMenuLine(P, fmt.Sprintf("/files?siteid=%d", site.Siteid), "Upload Files")
+		printMenuLine(P, fmt.Sprintf("/uploadfile?siteid=%d", site.Siteid), "Upload Files")
 		printMenuLine(P, fmt.Sprintf("/createpage?siteid=%d", site.Siteid), "Create Page")
 		printMenuFoot(P)
-
-		printPagesMenu(P, db, site)
 		return
 	}
 
 	if p == nil {
 		printMenuHead(P, "Actions")
 		printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
-		printMenuLine(P, fmt.Sprintf("/files?siteid=%d", site.Siteid), "Upload Files")
+		printMenuLine(P, fmt.Sprintf("/uploadfile?siteid=%d", site.Siteid), "Upload Files")
 		href := fmt.Sprintf("/createpage?siteid=%d&title=%s", site.Siteid, escape(qtitle))
 		link := fmt.Sprintf("Create page '%s'", qtitle)
 		printMenuLine(P, href, link)
 		printMenuFoot(P)
-
-		printPagesMenu(P, db, site)
 		return
 	}
 
 	printMenuHead(P, "Actions")
 	printMenuLine(P, fmt.Sprintf("/editsite?siteid=%d", site.Siteid), "Site Settings")
-	printMenuLine(P, fmt.Sprintf("/files?siteid=%d", site.Siteid), "Upload Files")
+	printMenuLine(P, fmt.Sprintf("/uploadfile?siteid=%d", site.Siteid), "Upload Files")
 	printMenuLine(P, fmt.Sprintf("/createpage?siteid=%d", site.Siteid), "Create Page")
 	printMenuLine(P, fmt.Sprintf("/editpage?siteid=%d&pageid=%d", site.Siteid, p.Pageid), "Edit Page")
 	printMenuFoot(P)
-
-	printPagesMenu(P, db, site)
 }
 
 func printMain(P PrintFunc, db *sql.DB, site *Site, p *Page, qtitle string, login *User) {
@@ -830,6 +826,7 @@ func parseLinks(body string, site *Site) string {
 		return body
 	}
 
+	// ![[file1.png]] => <img src="/sitename/~file/file1.png">
 	sre := `!\[\[(.+?)\]\]`
 	re := regexp.MustCompile(sre)
 	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
@@ -837,27 +834,28 @@ func parseLinks(body string, site *Site) string {
 		return fmt.Sprintf("<img src=\"/%s/~file/%s\">", escape(site.Sitename), matches[1])
 	})
 
+	// [[Target Page]] => <a href="/sitename/Target+Page">Target Page</a>
 	sre = `\[\[(.+?)\]\]`
 	re = regexp.MustCompile(sre)
 	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
 		matches := re.FindStringSubmatch(smatch)
-		target := matches[1]
-		if strings.HasPrefix(target, "~file/") {
-			target = strings.TrimPrefix(target, "~file/")
+		targetname := matches[1]
+		if strings.HasPrefix(targetname, "~file/") {
+			targetname = strings.TrimPrefix(targetname, "~file/")
 		}
-		return fmt.Sprintf("<a href=\"/%s/%s\">%s</a>", escape(site.Sitename), matches[1], target)
+		return fmt.Sprintf("<a href=\"/%s/%s\">%s</a>", escape(site.Sitename), matches[1], targetname)
 	})
 
 	return body
 }
 
 func printPagesMenu(P PrintFunc, db *sql.DB, site *Site) {
-	printMenuHead(P, "Pages")
-	defer printMenuFoot(P)
-
 	if site == nil {
 		return
 	}
+
+	printMenuHead(P, "Pages")
+	defer printMenuFoot(P)
 
 	s := fmt.Sprintf("SELECT page_id, title, body FROM %s ORDER BY title", pagetblName(site.Siteid))
 	rows, err := db.Query(s)
@@ -876,11 +874,38 @@ func printPagesMenu(P PrintFunc, db *sql.DB, site *Site) {
 	if i == 0 {
 		printMenuText(P, "<p class=\"text-gray-700 italic\">(no pages yet)</p>")
 	}
-	printMenuFoot(P)
+}
+
+func printFilesMenu(P PrintFunc, db *sql.DB, site *Site) {
+	if site == nil {
+		return
+	}
+
+	printMenuHead(P, "Files")
+	defer printMenuFoot(P)
+
+	s := fmt.Sprintf("SELECT filename FROM %s ORDER BY filename", filetblName(site.Siteid))
+	rows, err := db.Query(s)
+	if err != nil {
+		log.Printf("printFilesMenu() db err (%s)\n", err)
+		return
+	}
+	var filename string
+	i := 0
+	for rows.Next() {
+		rows.Scan(&filename)
+		printMenuLine(P, fileUrl(site.Sitename, filename), filename)
+		i++
+	}
+	if i == 0 {
+		printMenuText(P, "<p class=\"text-gray-700 italic\">(no files yet)</p>")
+	}
 }
 
 func printSitesMenu(P PrintFunc, db *sql.DB) {
 	printMenuHead(P, "Sites")
+	defer printMenuFoot(P)
+
 	s := "SELECT site_id, sitename, desc FROM site ORDER BY site_id"
 	rows, err := db.Query(s)
 	if err != nil {
@@ -898,7 +923,6 @@ func printSitesMenu(P PrintFunc, db *sql.DB) {
 	if i == 0 {
 		printMenuText(P, "<p class=\"text-gray-700 italic\">(no sites yet)</p>")
 	}
-	printMenuFoot(P)
 }
 
 func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
@@ -1356,6 +1380,7 @@ func uploadfileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printHead(P, nil, nil, "Upload File")
 
 		printSectionMenuHead(P, site, login)
+		printPagesMenu(P, db, site)
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
@@ -1367,18 +1392,7 @@ func uploadfileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormControlSubmitButton(P, "upload", "Upload")
 		printFormFoot(P)
 
-		s := fmt.Sprintf("SELECT filename FROM %s ORDER BY filename", filetblName(qsiteid))
-		rows, err := db.Query(s)
-		if handleDbErr(w, err, "uploadfileHandler") {
-			return
-		}
-		var filename string
-		printMenuHead(P, "Files")
-		for rows.Next() {
-			rows.Scan(&filename)
-			printMenuLine(P, fileUrl(site.Sitename, filename), filename)
-		}
-		printMenuFoot(P)
+		printFilesMenu(P, db, site)
 
 		printMainFoot(P)
 		printSidebar(P, db)
