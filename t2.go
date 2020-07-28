@@ -155,8 +155,7 @@ Initialize new database file:
 	http.HandleFunc("/createpage/", createpageHandler(db))
 	http.HandleFunc("/editpage/", editpageHandler(db))
 	http.HandleFunc("/delpage/", delpageHandler(db))
-	http.HandleFunc("/files/", filesHandler(db))
-	http.HandleFunc("/~file/", fileHandler(db))
+	http.HandleFunc("/uploadfile/", uploadfileHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -451,26 +450,33 @@ func pageUrl(sitename, title string) string {
 	}
 	return fmt.Sprintf("/%s/%s", escape(sitename), escape(title))
 }
+func isFileUrl(r *http.Request) bool {
+	ss := strings.Split(strings.Trim(r.URL.Path, "/"), "/")
+	if len(ss) >= 3 && ss[1] == "~file" {
+		return true
+	}
+	return false
+}
 func parseFileUrl(r *http.Request) (string, string) {
-	// file url takes the form "/~file/<sitename>/<filename>"
+	// file url takes the form "/<sitename>/~file/<filename>"
 	surl := strings.Trim(r.URL.Path, "/")
 	ss := strings.Split(surl, "/")
 	sslen := len(ss)
-	if sslen == 0 || sslen == 1 {
+	if sslen == 0 {
 		return "", ""
-	} else if sslen == 2 {
-		return unescape(ss[1]), ""
+	} else if sslen == 1 || sslen == 2 {
+		return unescape(ss[0]), ""
 	}
-	return unescape(ss[1]), unescape(ss[2])
+	return unescape(ss[0]), unescape(ss[2])
 }
 func fileUrl(sitename, filename string) string {
 	if sitename == "" && filename == "" {
 		return "/"
 	}
 	if filename == "" {
-		return fmt.Sprintf("/~file/%s", escape(sitename))
+		return fmt.Sprintf("/%s", escape(sitename))
 	}
-	return fmt.Sprintf("/~file/%s/%s", escape(sitename), escape(filename))
+	return fmt.Sprintf("/%s/~file/%s", escape(sitename), escape(filename))
 }
 
 func getLoginUser(r *http.Request, db *sql.DB) *User {
@@ -697,6 +703,11 @@ func printPageNav(P PrintFunc, pageTitle string) {
 
 func indexHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
+		if isFileUrl(r) {
+			printFile(db, w, r)
+			return
+		}
+
 		login := getLoginUser(r, db)
 		qsitename, qtitle := parsePageUrl(r)
 
@@ -823,14 +834,18 @@ func parseLinks(body string, site *Site) string {
 	re := regexp.MustCompile(sre)
 	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
 		matches := re.FindStringSubmatch(smatch)
-		return fmt.Sprintf("<img src=\"/~file/%s/%s\">", escape(site.Sitename), matches[1])
+		return fmt.Sprintf("<img src=\"/%s/~file/%s\">", escape(site.Sitename), matches[1])
 	})
 
 	sre = `\[\[(.+?)\]\]`
 	re = regexp.MustCompile(sre)
 	body = re.ReplaceAllStringFunc(body, func(smatch string) string {
 		matches := re.FindStringSubmatch(smatch)
-		return fmt.Sprintf("<a href=\"/%s/%s\">%s</a>", escape(site.Sitename), matches[1], matches[1])
+		target := matches[1]
+		if strings.HasPrefix(target, "~file/") {
+			target = strings.TrimPrefix(target, "~file/")
+		}
+		return fmt.Sprintf("<a href=\"/%s/%s\">%s</a>", escape(site.Sitename), matches[1], target)
 	})
 
 	return body
@@ -1284,7 +1299,7 @@ func delpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	}
 }
 
-func filesHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+func uploadfileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 	return func(w http.ResponseWriter, r *http.Request) {
 		var errmsg string
 
@@ -1307,7 +1322,7 @@ func filesHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 					defer file.Close()
 				}
 				if err != nil {
-					log.Printf("files: IO error reading file: %s\n", err)
+					log.Printf("uploadfile: IO error reading file: %s\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
@@ -1318,7 +1333,7 @@ func filesHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 				bs, err := ioutil.ReadAll(file)
 				if err != nil {
-					log.Printf("files: IO error reading file: %s\n", err)
+					log.Printf("uploadfile: IO error reading file: %s\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
@@ -1326,27 +1341,27 @@ func filesHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 				s := fmt.Sprintf("INSERT INTO %s (filename, bytes) VALUES (?, ?);", filetblName(qsiteid))
 				_, err = sqlexec(db, s, header.Filename, bs)
 				if err != nil {
-					log.Printf("files: DB error inserting file contents: %s\n", err)
+					log.Printf("uploadfile: DB error inserting file contents: %s\n", err)
 					errmsg = "A problem occured. Please try again."
 					break
 				}
 
-				http.Redirect(w, r, fmt.Sprintf("/files/?siteid=%d", qsiteid), http.StatusSeeOther)
+				http.Redirect(w, r, fmt.Sprintf("/uploadfile/?siteid=%d", qsiteid), http.StatusSeeOther)
 				return
 			}
 		}
 
 		w.Header().Set("Content-Type", "text/html")
 		P := makePrintFunc(w)
-		printHead(P, nil, nil, "Files")
+		printHead(P, nil, nil, "Upload File")
 
 		printSectionMenuHead(P, site, login)
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
 		printPageNav(P, "")
-		printFormHeadMultipart(P, fmt.Sprintf("/files/?siteid=%d", qsiteid))
-		printFormTitle(P, "Files")
+		printFormHeadMultipart(P, fmt.Sprintf("/uploadfile/?siteid=%d", qsiteid))
+		printFormTitle(P, "Upload File")
 		printFormControlError(P, errmsg)
 		printFormControlFile(P, "file", "Upload file")
 		printFormControlSubmitButton(P, "upload", "Upload")
@@ -1354,7 +1369,7 @@ func filesHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		s := fmt.Sprintf("SELECT filename FROM %s ORDER BY filename", filetblName(qsiteid))
 		rows, err := db.Query(s)
-		if handleDbErr(w, err, "filesHandler") {
+		if handleDbErr(w, err, "uploadfileHandler") {
 			return
 		}
 		var filename string
@@ -1366,9 +1381,7 @@ func filesHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printMenuFoot(P)
 
 		printMainFoot(P)
-
 		printSidebar(P, db)
-
 		printFoot(P)
 	}
 }
@@ -1380,39 +1393,37 @@ func fileext(filename string) string {
 	}
 	return strings.ToLower(ss[len(ss)-1])
 }
-func fileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
-	return func(w http.ResponseWriter, r *http.Request) {
-		qsitename, qfilename := parseFileUrl(r)
-		if qsitename == "" || qfilename == "" {
-			http.Error(w, fmt.Sprintf("Bad request (%s)", r.URL.Path), 400)
-			return
-		}
+func printFile(db *sql.DB, w http.ResponseWriter, r *http.Request) {
+	qsitename, qfilename := parseFileUrl(r)
+	if qsitename == "" || qfilename == "" {
+		http.Error(w, fmt.Sprintf("Bad request (%s)", r.URL.Path), 400)
+		return
+	}
 
-		site := querySiteBySitename(db, qsitename)
-		if site == nil {
-			http.Error(w, fmt.Sprintf("sitename %s not found.", qsitename), 400)
-			return
-		}
-		file := queryFileByFilename(db, site.Siteid, qfilename)
-		if file == nil {
-			http.Error(w, fmt.Sprintf("filename %s not found.", qfilename), 400)
-			return
-		}
+	site := querySiteBySitename(db, qsitename)
+	if site == nil {
+		http.Error(w, fmt.Sprintf("sitename %s not found.", qsitename), 400)
+		return
+	}
+	file := queryFileByFilename(db, site.Siteid, qfilename)
+	if file == nil {
+		http.Error(w, fmt.Sprintf("filename %s not found.", qfilename), 400)
+		return
+	}
 
-		ext := fileext(file.Filename)
-		if ext == "" {
-			w.Header().Set("Content-Type", "application")
-		} else if ext == "png" || ext == "gif" || ext == "bmp" {
-			w.Header().Set("Content-Type", fmt.Sprintf("image/%s", ext))
-		} else if ext == "jpg" || ext == "jpeg" {
-			w.Header().Set("Content-Type", fmt.Sprintf("image/jpeg"))
-		} else {
-			w.Header().Set("Content-Type", fmt.Sprintf("application/%s", ext))
-		}
+	ext := fileext(file.Filename)
+	if ext == "" {
+		w.Header().Set("Content-Type", "application")
+	} else if ext == "png" || ext == "gif" || ext == "bmp" {
+		w.Header().Set("Content-Type", fmt.Sprintf("image/%s", ext))
+	} else if ext == "jpg" || ext == "jpeg" {
+		w.Header().Set("Content-Type", fmt.Sprintf("image/jpeg"))
+	} else {
+		w.Header().Set("Content-Type", fmt.Sprintf("application/%s", ext))
+	}
 
-		_, err := w.Write(file.Bytes)
-		if handleDbErr(w, err, "fileHandler") {
-			return
-		}
+	_, err := w.Write(file.Bytes)
+	if handleDbErr(w, err, "printFile") {
+		return
 	}
 }
