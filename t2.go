@@ -34,6 +34,7 @@ type Page struct {
 	Body   string
 }
 type File struct {
+	Fileid   int64
 	Filename string
 	Bytes    []byte
 }
@@ -156,6 +157,7 @@ Initialize new database file:
 	http.HandleFunc("/editpage/", editpageHandler(db))
 	http.HandleFunc("/delpage/", delpageHandler(db))
 	http.HandleFunc("/uploadfile/", uploadfileHandler(db))
+	http.HandleFunc("/delfile/", delfileHandler(db))
 
 	port := "8000"
 	fmt.Printf("Listening on %s...\n", port)
@@ -373,6 +375,9 @@ func atoi(s string) int {
 }
 func idtoi(sid string) int64 {
 	return int64(atoi(sid))
+}
+func itoa(n int64) string {
+	return strconv.FormatInt(n, 10)
 }
 
 func parseArgs(args []string) (map[string]string, []string) {
@@ -1380,7 +1385,13 @@ func uploadfileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printHead(P, nil, nil, "Upload File")
 
 		printSectionMenuHead(P, site, login)
+
+		printMenuHead(P, "Actions")
+		printMenuLine(P, fmt.Sprintf("/delfile?siteid=%d", site.Siteid), "Delete Files")
+		printMenuFoot(P)
+
 		printPagesMenu(P, db, site)
+		printFilesMenu(P, db, site)
 		printSectionMenuFoot(P)
 
 		printMainHead(P)
@@ -1391,8 +1402,6 @@ func uploadfileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		printFormControlFile(P, "file", "Upload file")
 		printFormControlSubmitButton(P, "upload", "Upload")
 		printFormFoot(P)
-
-		printFilesMenu(P, db, site)
 
 		printMainFoot(P)
 		printSidebar(P, db)
@@ -1439,5 +1448,106 @@ func printFile(db *sql.DB, w http.ResponseWriter, r *http.Request) {
 	_, err := w.Write(file.Bytes)
 	if handleDbErr(w, err, "printFile") {
 		return
+	}
+}
+
+func delfileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
+	return func(w http.ResponseWriter, r *http.Request) {
+		var errmsg string
+
+		login := getLoginUser(r, db)
+		if !validateLogin(w, login) {
+			return
+		}
+
+		qsiteid := idtoi(r.FormValue("siteid"))
+		site := querySiteById(db, qsiteid)
+		if site == nil {
+			http.Error(w, fmt.Sprintf("siteid %d not found.", qsiteid), 404)
+			return
+		}
+
+		// Read all checked fileid's into map. Unchecked filenames will be discarded.
+		// Ex. checkedFileids[<fileid>] == "y" (checked)
+		checkedFileids := map[int64]string{}
+		r.ParseForm()
+		for k := range r.Form {
+			if strings.HasPrefix(k, "chk-") {
+				fileid := idtoi(strings.TrimPrefix(k, "chk-"))
+				checkedFileids[fileid] = "y"
+			}
+		}
+
+		if r.Method == "POST" {
+			for {
+				fileids := []string{}
+				for k := range checkedFileids {
+					fileids = append(fileids, itoa(k))
+				}
+				s := fmt.Sprintf("DELETE FROM %s WHERE file_id IN (%s)", filetblName(site.Siteid), strings.Join(fileids, ", "))
+				_, err := sqlexec(db, s)
+				if err != nil {
+					log.Printf("Error deleting files (%s)\n", err)
+					errmsg = "A problem occured. Please try again."
+					break
+				}
+
+				http.Redirect(w, r, fmt.Sprintf("/uploadfile/?siteid=%d", qsiteid), http.StatusSeeOther)
+				return
+			}
+		}
+
+		w.Header().Set("Content-Type", "text/html")
+		P := makePrintFunc(w)
+		printHead(P, nil, nil, "Upload File")
+
+		printSectionMenuHead(P, site, login)
+
+		printMenuHead(P, "Actions")
+		printMenuLine(P, fmt.Sprintf("/uploadfile?siteid=%d", site.Siteid), "Upload Files")
+		printMenuFoot(P)
+
+		printPagesMenu(P, db, site)
+		printFilesMenu(P, db, site)
+		printSectionMenuFoot(P)
+
+		printMainHead(P)
+		printPageNav(P, "")
+		printFormHeadMultipart(P, fmt.Sprintf("/delfile/?siteid=%d", qsiteid))
+		printFormTitle(P, "Delete Files")
+		printFormControlError(P, errmsg)
+
+		s := fmt.Sprintf("SELECT file_id, filename FROM %s ORDER BY filename", filetblName(site.Siteid))
+		rows, err := db.Query(s)
+		if handleDbErr(w, err, "delfileHandler") {
+			return
+		}
+		var file File
+		i := 0
+		for rows.Next() {
+			rows.Scan(&file.Fileid, &file.Filename)
+			printFormControlHead(P)
+
+			if checkedFileids[file.Fileid] != "" {
+				P("<input id=\"chk-%d\" name=\"chk-%d\" type=\"checkbox\" value=\"y\" checked>\n", file.Fileid, file.Fileid)
+			} else {
+				P("<input id=\"chk-%d\" name=\"chk-%d\" type=\"checkbox\" value=\"y\">\n", file.Fileid, file.Fileid)
+			}
+			P("<label class=\"mr-2\" for=\"chk-%d\">%s</label>\n", file.Fileid, file.Filename)
+			//			P("<a class=\"text-xs text-blue-900\" href=\"%s\">link</a>\n", fileUrl(site.Sitename, file.Filename))
+
+			printFormControlFoot(P)
+			i++
+		}
+		if i == 0 {
+			printMenuText(P, "<p class=\"text-gray-700 italic\">(no files yet)</p>")
+		}
+
+		printFormControlSubmitButton(P, "del", "Delete")
+		printFormFoot(P)
+
+		printMainFoot(P)
+		printSidebar(P, db)
+		printFoot(P)
 	}
 }
