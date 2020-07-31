@@ -530,6 +530,10 @@ func parseMarkdown(s string) string {
 	s = strings.ReplaceAll(s, "%", "%%")
 	return string(github_flavored_markdown.Markdown([]byte(s)))
 }
+func normalizeText(s string) string {
+	s = strings.ReplaceAll(s, "\r", "") // CRLF => CR
+	return s
+}
 
 //*** Html menu template functions ***
 func printSectionMenuHead(P PrintFunc, site *Site, login *User) {
@@ -943,6 +947,7 @@ func createsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		if r.Method == "POST" {
 			site.Sitename = strings.TrimSpace(r.FormValue("sitename"))
 			site.Desc = strings.TrimSpace(r.FormValue("desc"))
+			site.Desc = normalizeText(site.Desc)
 			for {
 				if site.Sitename == "" {
 					errmsg = "Please enter a site name."
@@ -1000,6 +1005,7 @@ func editsiteHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		if r.Method == "POST" {
 			site.Sitename = strings.TrimSpace(r.FormValue("sitename"))
 			site.Desc = strings.TrimSpace(r.FormValue("desc"))
+			site.Desc = normalizeText(site.Desc)
 			for {
 				if site.Sitename == "" {
 					errmsg = "Please enter a site name."
@@ -1149,6 +1155,7 @@ func createpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		p.Title = strings.TrimSpace(r.FormValue("title"))
 		if r.Method == "POST" {
 			p.Body = r.FormValue("body")
+			p.Body = normalizeText(p.Body)
 			for {
 				if p.Title == "" {
 					errmsg = "Please enter a page title."
@@ -1214,6 +1221,7 @@ func editpageHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 		if r.Method == "POST" {
 			p.Title = strings.TrimSpace(r.FormValue("title"))
 			p.Body = r.FormValue("body")
+			p.Body = normalizeText(p.Body)
 			for {
 				if p.Title == "" {
 					errmsg = "Please enter a page title."
