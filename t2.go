@@ -1521,7 +1521,7 @@ func delfileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 
 		printMainHead(P)
 		printPageNav(P, "")
-		printFormHeadMultipart(P, fmt.Sprintf("/delfile/?siteid=%d", qsiteid))
+		printFormHead(P, fmt.Sprintf("/delfile/?siteid=%d", qsiteid))
 		printFormTitle(P, "Delete Files")
 		printFormControlError(P, errmsg)
 
@@ -1548,10 +1548,12 @@ func delfileHandler(db *sql.DB) func(http.ResponseWriter, *http.Request) {
 			i++
 		}
 		if i == 0 {
-			printMenuText(P, "<p class=\"text-gray-700 italic\">(no files yet)</p>")
+			P("<p class=\"text-gray-700 italic\">(no files yet)</p>")
 		}
 
-		printFormControlSubmitButton(P, "del", "Delete")
+		if i > 0 {
+			printFormControlSubmitButton(P, "del", "Delete")
+		}
 		printFormFoot(P)
 
 		printMainFoot(P)
